@@ -72,6 +72,10 @@ public final class GameActivity extends SDLActivity {
             super.onBackPressed();
             return;
         }
+        if (touchControls != null && touchControls.isEditMode()) {
+            touchControls.exitEditMode(true);
+            return;
+        }
         if (SDLActivity.isScreenKeyboardShown()) {
             hideKeyboard();
             return;
