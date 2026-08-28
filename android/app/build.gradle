@@ -95,8 +95,8 @@ android {
         applicationId "org.kartkrew.ringracers"
         minSdk 28
         targetSdk 34
-        versionCode 2401
-        versionName "2.4-android-1"
+        versionCode 2402
+        versionName "2.4-android-2"
 
         ndk {
             abiFilters "arm64-v8a"

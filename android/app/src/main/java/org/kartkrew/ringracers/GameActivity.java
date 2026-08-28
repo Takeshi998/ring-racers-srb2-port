@@ -72,8 +72,30 @@ public final class GameActivity extends SDLActivity {
             super.onBackPressed();
             return;
         }
+        if (SDLActivity.isScreenKeyboardShown()) {
+            hideKeyboard();
+            return;
+        }
         SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_ESCAPE);
         handler.postDelayed(() -> SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_ESCAPE), 40L);
+    }
+
+    public void toggleKeyboard() {
+        handler.post(() -> {
+            if (SDLActivity.isScreenKeyboardShown()) {
+                hideKeyboard();
+            } else {
+                showKeyboard();
+            }
+        });
+    }
+
+    public void showKeyboard() {
+        handler.post(() -> SDLActivity.showTextInput(0, 0, 0, 0));
+    }
+
+    public void hideKeyboard() {
+        handler.post(() -> SDLActivity.sendMessage(3, 0));
     }
 
     private void enableImmersiveMode() {

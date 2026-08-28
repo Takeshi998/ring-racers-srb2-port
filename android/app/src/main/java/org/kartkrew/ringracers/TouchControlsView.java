@@ -31,11 +31,13 @@ final class TouchControlsView extends View {
     private final List<ActionButton> actionButtons = new ArrayList<>();
     private final Map<Integer, Set<Integer>> pointerKeys = new HashMap<>();
     private final Map<Integer, Integer> keyReferences = new HashMap<>();
+    private final Set<Integer> keyboardPointers = new HashSet<>();
 
     private float dpadCenterX;
     private float dpadCenterY;
     private float dpadRadius;
     private ActionButton pauseButton;
+    private ActionButton keyboardButton;
 
     TouchControlsView(Context context) {
         super(context);
@@ -68,7 +70,9 @@ final class TouchControlsView extends View {
         actionButtons.add(button("BAIL", "Y", KeyEvent.KEYCODE_V, 0.86f, 0.32f, 0.065f, 202, 76, 111));
         actionButtons.add(button("VOTE", "Z", KeyEvent.KEYCODE_Z, 0.96f, 0.31f, 0.052f, 105, 111, 118));
 
-        pauseButton = new ActionButton("", "", KeyEvent.KEYCODE_ESCAPE, width * 0.50f, height * 0.085f,
+        pauseButton = new ActionButton("", "", KeyEvent.KEYCODE_ESCAPE, width * 0.54f, height * 0.085f,
+            screenHeight * 0.052f, Color.rgb(53, 58, 64));
+        keyboardButton = new ActionButton("", "", 0, width * 0.46f, height * 0.085f,
             screenHeight * 0.052f, Color.rgb(53, 58, 64));
     }
 
@@ -77,9 +81,10 @@ final class TouchControlsView extends View {
         super.onDraw(canvas);
         drawDpad(canvas);
         for (ActionButton button : actionButtons) {
-            drawActionButton(canvas, button, false);
+            drawActionButton(canvas, button, ButtonKind.NORMAL);
         }
-        drawActionButton(canvas, pauseButton, true);
+        drawActionButton(canvas, pauseButton, ButtonKind.PAUSE);
+        drawActionButton(canvas, keyboardButton, ButtonKind.KEYBOARD);
     }
 
     @Override
@@ -120,6 +125,7 @@ final class TouchControlsView extends View {
     }
 
     void releaseAll() {
+        keyboardPointers.clear();
         List<Integer> pressedKeys = new ArrayList<>(keyReferences.keySet());
         pointerKeys.clear();
         keyReferences.clear();
@@ -136,6 +142,16 @@ final class TouchControlsView extends View {
     }
 
     private void updatePointer(int pointerId, float pointerX, float pointerY) {
+        boolean inKeyboard = keyboardButton != null && keyboardButton.contains(pointerX, pointerY);
+        if (inKeyboard) {
+            if (!keyboardPointers.contains(pointerId)) {
+                keyboardPointers.add(pointerId);
+                toggleKeyboard();
+            }
+        } else {
+            keyboardPointers.remove(pointerId);
+        }
+
         Set<Integer> nextKeys = keysAt(pointerX, pointerY);
         Set<Integer> previousKeys = pointerKeys.getOrDefault(pointerId, Collections.emptySet());
 
@@ -159,6 +175,7 @@ final class TouchControlsView extends View {
     }
 
     private void clearPointer(int pointerId) {
+        keyboardPointers.remove(pointerId);
         Set<Integer> previousKeys = pointerKeys.remove(pointerId);
         if (previousKeys != null) {
             for (int keyCode : previousKeys) {
@@ -168,7 +185,23 @@ final class TouchControlsView extends View {
         invalidate();
     }
 
+    private void toggleKeyboard() {
+        Context context = getContext();
+        if (context instanceof GameActivity) {
+            ((GameActivity) context).toggleKeyboard();
+        } else {
+            if (SDLActivity.isScreenKeyboardShown()) {
+                SDLActivity.sendMessage(3, 0);
+            } else {
+                SDLActivity.showTextInput(0, 0, 0, 0);
+            }
+        }
+    }
+
     private Set<Integer> keysAt(float pointerX, float pointerY) {
+        if (keyboardButton != null && keyboardButton.contains(pointerX, pointerY)) {
+            return Collections.emptySet();
+        }
         for (ActionButton button : actionButtons) {
             if (button.contains(pointerX, pointerY)) {
                 return Collections.singleton(button.keyCode);
@@ -261,17 +294,24 @@ final class TouchControlsView extends View {
         canvas.restore();
     }
 
-    private void drawActionButton(Canvas canvas, ActionButton button, boolean pause) {
+    private enum ButtonKind {
+        NORMAL,
+        PAUSE,
+        KEYBOARD
+    }
+
+    private void drawActionButton(Canvas canvas, ActionButton button, ButtonKind kind) {
         if (button == null) {
             return;
         }
-        boolean pressed = isPressed(button.keyCode);
+        boolean pressed = (kind == ButtonKind.KEYBOARD) ? !keyboardPointers.isEmpty() : isPressed(button.keyCode);
         int alpha = pressed ? 230 : 140;
+        fillPaint.setStyle(Paint.Style.FILL);
         fillPaint.setColor(Color.argb(alpha, Color.red(button.color), Color.green(button.color), Color.blue(button.color)));
         canvas.drawCircle(button.centerX, button.centerY, button.radius, fillPaint);
         canvas.drawCircle(button.centerX, button.centerY, button.radius, outlinePaint);
 
-        if (pause) {
+        if (kind == ButtonKind.PAUSE) {
             fillPaint.setColor(LABEL_COLOR);
             float barWidth = button.radius * 0.18f;
             float barHeight = button.radius * 0.70f;
@@ -291,6 +331,11 @@ final class TouchControlsView extends View {
             return;
         }
 
+        if (kind == ButtonKind.KEYBOARD) {
+            drawKeyboardIcon(canvas, button.centerX, button.centerY, button.radius);
+            return;
+        }
+
         float labelSize = Math.max(dp(9), button.radius * 0.34f);
         textPaint.setTextSize(labelSize);
         Paint.FontMetrics metrics = textPaint.getFontMetrics();
@@ -301,6 +346,43 @@ final class TouchControlsView extends View {
         textPaint.setColor(Color.argb(205, 255, 255, 255));
         canvas.drawText(button.code, button.centerX, button.centerY + button.radius * 0.48f, textPaint);
         textPaint.setColor(LABEL_COLOR);
+    }
+
+    private void drawKeyboardIcon(Canvas canvas, float cx, float cy, float radius) {
+        float kw = radius * 1.18f;
+        float kh = radius * 0.78f;
+        RectF kbRect = new RectF(cx - kw / 2f, cy - kh / 2f, cx + kw / 2f, cy + kh / 2f);
+
+        // Keyboard body outline
+        outlinePaint.setStrokeWidth(dp(1.5f));
+        canvas.drawRoundRect(kbRect, dp(3f), dp(3f), outlinePaint);
+        outlinePaint.setStrokeWidth(dp(2f)); // restore standard outline width
+
+        // Key dots / segments inside
+        fillPaint.setStyle(Paint.Style.FILL);
+        fillPaint.setColor(LABEL_COLOR);
+
+        float dotRadius = dp(1.2f);
+        // Row 1 (top keys)
+        float row1Y = cy - kh * 0.22f;
+        float[] row1XOffsets = {-kw * 0.30f, -kw * 0.10f, kw * 0.10f, kw * 0.30f};
+        for (float xOffset : row1XOffsets) {
+            canvas.drawCircle(cx + xOffset, row1Y, dotRadius, fillPaint);
+        }
+
+        // Row 2 (middle keys)
+        float row2Y = cy + kh * 0.04f;
+        float[] row2XOffsets = {-kw * 0.22f, 0f, kw * 0.22f};
+        for (float xOffset : row2XOffsets) {
+            canvas.drawCircle(cx + xOffset, row2Y, dotRadius, fillPaint);
+        }
+
+        // Row 3 (space bar)
+        float row3Y = cy + kh * 0.28f;
+        float spaceHalfW = kw * 0.26f;
+        float spaceHalfH = dp(1.1f);
+        canvas.drawRoundRect(new RectF(cx - spaceHalfW, row3Y - spaceHalfH, cx + spaceHalfW, row3Y + spaceHalfH),
+            dp(1f), dp(1f), fillPaint);
     }
 
     private float dp(float value) {
