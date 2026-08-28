@@ -1,0 +1,173 @@
+plugins {
+    id "com.android.application"
+}
+
+def installRoot = rootProject.projectDir.parentFile.parentFile
+def generatedAssets = layout.buildDirectory.dir("generated/ringRacersAssets").get().asFile
+def generatedResources = layout.buildDirectory.dir("generated/ringRacersResources").get().asFile
+def generatedSdlJava = layout.buildDirectory.dir("generated/sdlJava").get().asFile
+def sdlVersion = "2.32.10"
+def sdlJavaFiles = [
+    "HIDDevice.java",
+    "HIDDeviceBLESteamController.java",
+    "HIDDeviceManager.java",
+    "HIDDeviceUSB.java",
+    "SDL.java",
+    "SDLActivity.java",
+    "SDLAudioManager.java",
+    "SDLControllerManager.java",
+    "SDLSurface.java"
+]
+def gameDataFiles = [
+    "altmusic.pk3",
+    "chars.pk3",
+    "followers.pk3",
+    "gfx.pk3",
+    "maps.pk3",
+    "music.pk3",
+    "scripts.pk3",
+    "shaders.pk3",
+    "sounds.pk3",
+    "staffghosts.pk3",
+    "textures_General.pk3",
+    "textures_OriginalZones.pk3",
+    "textures_SEGAZones.pk3",
+    "unlocks.pk3"
+]
+
+def requiredAssets = [
+    new File(installRoot, "bios.pk3"),
+    new File(installRoot, "gamecontrollerdb.txt")
+] + gameDataFiles.collect { new File(installRoot, "data/${it}") }
+
+tasks.register("stageGameAssets", Sync) {
+    inputs.files(requiredAssets)
+    into(new File(generatedAssets, "game"))
+
+    from(new File(installRoot, "bios.pk3"))
+    from(new File(installRoot, "gamecontrollerdb.txt"))
+    from(new File(installRoot, "data")) {
+        include(gameDataFiles)
+        into("data")
+        rename { name -> name.toLowerCase(Locale.ROOT) }
+    }
+
+    doFirst {
+        def missing = requiredAssets.findAll { !it.isFile() }
+        if (!missing.isEmpty()) {
+            throw new org.gradle.api.GradleException("Missing Ring Racers assets: ${missing.join(', ')}")
+        }
+    }
+}
+
+tasks.register("stageAppIcon", Sync) {
+    from(new File(rootProject.projectDir.parentFile, "srb2.png")) {
+        rename { "icon.png" }
+    }
+    into(new File(generatedResources, "drawable"))
+}
+
+tasks.register("prepareSdlJava") {
+    def packageDirectory = new File(generatedSdlJava, "org/libsdl/app")
+    def generatedFiles = sdlJavaFiles.collect { new File(packageDirectory, it) }
+    outputs.files(generatedFiles)
+
+    doLast {
+        packageDirectory.mkdirs()
+        sdlJavaFiles.each { filename ->
+            def destination = new File(packageDirectory, filename)
+            if (!destination.isFile()) {
+                def source = new URL("https://raw.githubusercontent.com/libsdl-org/SDL/release-${sdlVersion}/android-project/app/src/main/java/org/libsdl/app/${filename}")
+                source.withInputStream { input ->
+                    destination.withOutputStream { output -> output << input }
+                }
+            }
+        }
+    }
+}
+
+android {
+    namespace "org.kartkrew.ringracers"
+    compileSdk 34
+    ndkVersion "26.3.11579264"
+
+    defaultConfig {
+        applicationId "org.kartkrew.ringracers"
+        minSdk 28
+        targetSdk 34
+        versionCode 2401
+        versionName "2.4-android-1"
+
+        ndk {
+            abiFilters "arm64-v8a"
+        }
+
+        externalNativeBuild {
+            cmake {
+                arguments "-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                    "-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=C:/Android/sdk/ndk/26.3.11579264/build/cmake/android.toolchain.cmake",
+                    "-DVCPKG_TARGET_TRIPLET=arm64-android",
+                    "-DVCPKG_HOST_TRIPLET=x64-mingw-dynamic",
+                    "-DVCPKG_MANIFEST_MODE=OFF",
+                    "-DSRB2_CONFIG_ENABLE_WEBM_MOVIES=OFF",
+                    "-DSRB2_CONFIG_ENABLE_DISCORDRPC=OFF",
+                    "-DSRB2_CONFIG_HWRENDER=OFF",
+                    "-DSRB2_CONFIG_EXECINFO=OFF",
+                    "-DSRB2_CONFIG_STATIC_STDLIB=OFF",
+                    "-DSRB2_CONFIG_USEASM=OFF",
+                    "-DSRB2_SDL2_EXE_NAME=main",
+                    "-DANDROID_STL=c++_shared"
+                cFlags "-U_FORTIFY_SOURCE", "-D_FORTIFY_SOURCE=0"
+                cppFlags "-U_FORTIFY_SOURCE", "-D_FORTIFY_SOURCE=0"
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            debuggable true
+        }
+        release {
+            minifyEnabled false
+            ndk {
+                debugSymbolLevel "SYMBOL_TABLE"
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file("../../CMakeLists.txt")
+            version "3.22.1"
+        }
+    }
+
+    sourceSets {
+        main {
+            assets.srcDir(generatedAssets)
+            java.srcDir(generatedSdlJava)
+            res.srcDir(generatedResources)
+        }
+    }
+
+    androidResources {
+        noCompress += ["pk3"]
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(tasks.named("stageGameAssets"))
+    dependsOn(tasks.named("stageAppIcon"))
+    dependsOn(tasks.named("prepareSdlJava"))
+}
