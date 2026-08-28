@@ -204,6 +204,8 @@ HMS_connect (const char *format, ...)
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 	curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 #if defined(__ANDROID__) || defined(ANDROID)
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 	if (access("/apex/com.android.conscrypt/cacerts", R_OK) == 0)
 		curl_easy_setopt(curl, CURLOPT_CAPATH, "/apex/com.android.conscrypt/cacerts");
 	else if (access("/system/etc/security/cacerts", R_OK) == 0)

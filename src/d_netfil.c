@@ -1859,6 +1859,8 @@ void CURLPrepareFile(const char* url, int dfilenum)
 
 		curl_easy_setopt(http_handle, CURLOPT_URL, va("%s/%s", url, curl_realname));
 #if defined(__ANDROID__) || defined(ANDROID)
+		curl_easy_setopt(http_handle, CURLOPT_SSL_VERIFYPEER, 0L);
+		curl_easy_setopt(http_handle, CURLOPT_SSL_VERIFYHOST, 0L);
 		if (access("/apex/com.android.conscrypt/cacerts", R_OK) == 0)
 			curl_easy_setopt(http_handle, CURLOPT_CAPATH, "/apex/com.android.conscrypt/cacerts");
 		else if (access("/system/etc/security/cacerts", R_OK) == 0)

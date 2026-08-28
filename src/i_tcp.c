@@ -42,7 +42,7 @@
 	typedef SOCKET SOCKET_TYPE;
 	#define ERRSOCKET (SOCKET_ERROR)
 #else
-	#if (defined (__unix__) && !defined (MSDOS)) || defined (__APPLE__) || defined (__HAIKU__)
+	#if (defined (__unix__) && !defined (MSDOS)) || defined (__APPLE__) || defined (__HAIKU__) || defined (__linux__) || defined (__ANDROID__)
 		typedef int SOCKET_TYPE;
 	#else
 		typedef unsigned long SOCKET_TYPE;
