@@ -34,6 +34,11 @@
 #include "sdl/ogl_sdl.h"
 #include "st_stuff.h" // kill
 
+#ifdef HAVE_SDL
+#include <SDL.h>
+extern SDL_Window *window;
+#endif
+
 // Legacy FinishUpdate Draws
 #include "d_netcmd.h"
 #ifdef HAVE_DISCORDRPC
@@ -279,13 +284,28 @@ void I_FinishUpdate(void)
 	rhi->push_default_render_pass(true);
 
 	// Upscale draw the backbuffer (with postprocessing maybe?)
+	int drawable_w = vid.realwidth;
+	int drawable_h = vid.realheight;
+#ifdef HAVE_SDL
+	SDL_Window* sdl_window = SDL_GL_GetCurrentWindow();
+	if (sdl_window != NULL)
+	{
+		SDL_GL_GetDrawableSize(sdl_window, &drawable_w, &drawable_h);
+		if (drawable_w > 0 && drawable_h > 0)
+		{
+			vid.realwidth = static_cast<uint32_t>(drawable_w);
+			vid.realheight = static_cast<uint32_t>(drawable_h);
+		}
+	}
+#endif
+
 	if (cv_scr_scale.value != FRACUNIT)
 	{
 		float f = std::max(FixedToFloat(cv_scr_scale.value), 0.f);
-		float w = vid.realwidth * f;
-		float h = vid.realheight * f;
-		float x = (vid.realwidth - w) * (0.5f + (FixedToFloat(cv_scr_x.value) * 0.5f));
-		float y = (vid.realheight - h) * (0.5f + (FixedToFloat(cv_scr_y.value) * 0.5f));
+		float w = drawable_w * f;
+		float h = drawable_h * f;
+		float x = (drawable_w - w) * (0.5f + (FixedToFloat(cv_scr_x.value) * 0.5f));
+		float y = (drawable_h - h) * (0.5f + (FixedToFloat(cv_scr_y.value) * 0.5f));
 
 		g_hw_state.blit_rect->set_output(x, y, w, h, true, true);
 		g_hw_state.sharp_bilinear_blit_rect->set_output(x, y, w, h, true, true);
@@ -294,10 +314,10 @@ void I_FinishUpdate(void)
 	}
 	else
 	{
-		g_hw_state.blit_rect->set_output(0, 0, vid.realwidth, vid.realheight, true, true);
-		g_hw_state.sharp_bilinear_blit_rect->set_output(0, 0, vid.realwidth, vid.realheight, true, true);
-		g_hw_state.crt_blit_rect->set_output(0, 0, vid.realwidth, vid.realheight, true, true);
-		g_hw_state.crtsharp_blit_rect->set_output(0, 0, vid.realwidth, vid.realheight, true, true);
+		g_hw_state.blit_rect->set_output(0, 0, drawable_w, drawable_h, true, true);
+		g_hw_state.sharp_bilinear_blit_rect->set_output(0, 0, drawable_w, drawable_h, true, true);
+		g_hw_state.crt_blit_rect->set_output(0, 0, drawable_w, drawable_h, true, true);
+		g_hw_state.crtsharp_blit_rect->set_output(0, 0, drawable_w, drawable_h, true, true);
 	}
 	g_hw_state.blit_rect->set_texture(g_hw_state.backbuffer->color(), static_cast<uint32_t>(vid.width), static_cast<uint32_t>(vid.height));
 	g_hw_state.sharp_bilinear_blit_rect->set_texture(g_hw_state.backbuffer->color(), static_cast<uint32_t>(vid.width), static_cast<uint32_t>(vid.height));

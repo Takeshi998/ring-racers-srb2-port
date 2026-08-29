@@ -1495,8 +1495,12 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 	if (window != NULL)
 		return SDL_FALSE;
 
+#if defined(ANDROID) || defined(__ANDROID__)
+	flags |= SDL_WINDOW_FULLSCREEN;
+#else
 	if (fullscreen)
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+#endif
 
 	if (borderlesswindow)
 		flags |= SDL_WINDOW_BORDERLESS;

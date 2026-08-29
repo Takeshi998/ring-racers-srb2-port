@@ -26,6 +26,8 @@ public final class GameActivity extends SDLActivity {
         File gameDirectory = new File(getFilesDir(), "game");
         File userRoot = new File(getFilesDir(), "user");
         new File(userRoot, ".ringracers").mkdirs();
+        new File(userRoot, ".ringracers/addons").mkdirs();
+        new File(userRoot, "addons").mkdirs();
         return new String[]{
             "-waddir", gameDirectory.getAbsolutePath(),
             "-home", userRoot.getAbsolutePath()

@@ -8476,19 +8476,33 @@ void P_FreeLevelState(void)
 	// Clear pointers that would be left dangling by the purge
 	R_FlushTranslationColormapCache();
 
+	// Queued draws might reference patches or colormaps about to be freed.
+	// Flush 2D to make sure no read-after-free occurs.
+	if (rendermode == render_soft)
+	{
+		srb2::rhi::Rhi* rhi = srb2::sys::get_rhi(srb2::sys::g_current_rhi);
+		if (rhi && srb2::sys::main_hardware_state() && srb2::sys::main_hardware_state()->twodee_renderer)
+		{
+			srb2::sys::main_hardware_state()->twodee_renderer->flush(*rhi, srb2::g_2d);
+		}
+	}
+
+	if (rendermode == render_soft)
+	{
+		// Queued draws might reference patches or colormaps about to be freed.
+		// Flush 2D to make sure no read-after-free occurs before freeing sprites.
+		srb2::rhi::Rhi* rhi = srb2::sys::get_rhi(srb2::sys::g_current_rhi);
+		if (rhi && srb2::sys::main_hardware_state() && srb2::sys::main_hardware_state()->twodee_renderer)
+		{
+			srb2::sys::main_hardware_state()->twodee_renderer->flush(*rhi, srb2::g_2d);
+		}
+	}
+
 #ifdef HWRENDER
 	// Free GPU textures before freeing patches.
 	if (rendermode == render_opengl && (vid.glstate == VID_GL_LIBRARY_LOADED))
 		HWR_ClearAllTextures();
 #endif
-
-	if (rendermode == render_soft)
-	{
-		// Queued draws might reference patches or colormaps about to be freed.
-		// Flush 2D to make sure no read-after-free occurs.
-		srb2::rhi::Rhi* rhi = srb2::sys::get_rhi(srb2::sys::g_current_rhi);
-		srb2::sys::main_hardware_state()->twodee_renderer->flush(*rhi, srb2::g_2d);
-	}
 
 	G_FreeGhosts(); // ghosts are allocated with PU_LEVEL
 	Patch_FreeTag(PU_PATCH_LOWPRIORITY);
