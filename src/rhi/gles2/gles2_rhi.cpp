@@ -527,11 +527,7 @@ void Gles2Rhi::destroy_buffer(rhi::Handle<rhi::Buffer> handle)
 	GL_ASSERT;
 }
 
-void Gles2Rhi::update_buffer(
-	rhi::Handle<rhi::Buffer> handle,
-	uint32_t offset,
-	tcb::span<const std::byte> data
-)
+void Gles2Rhi::update_buffer(rhi::Handle<rhi::Buffer> handle, uint32_t offset, tcb::span<const std::byte> data)
 {
 	if (data.empty())
 	{
@@ -766,10 +762,12 @@ void Gles2Rhi::apply_framebuffer(const RenderPassBeginInfo& info, bool allow_cle
 		GL_ASSERT;
 		gl_->BindFramebuffer(GL_FRAMEBUFFER, fb_name);
 		GL_ASSERT;
-		fb_itr = framebuffers_.insert({
-			Gles2FramebufferKey {info.color_attachment, info.depth_stencil_attachment},
-			static_cast<uint32_t>(fb_name)
-		}).first;
+		fb_itr = framebuffers_
+					 .insert(
+						 {Gles2FramebufferKey {info.color_attachment, info.depth_stencil_attachment},
+						  static_cast<uint32_t>(fb_name)}
+					 )
+					 .first;
 
 		SRB2_ASSERT(texture_slab_.is_valid(info.color_attachment));
 		auto& texture = texture_slab_[info.color_attachment];
@@ -823,7 +821,7 @@ void Gles2Rhi::push_default_render_pass(bool clear)
 {
 	SRB2_ASSERT(platform_ != nullptr);
 
-	render_pass_stack_.emplace_back(Gles2Rhi::DefaultRenderPassState { clear });
+	render_pass_stack_.emplace_back(Gles2Rhi::DefaultRenderPassState {clear});
 	apply_default_framebuffer(clear);
 }
 
@@ -845,12 +843,8 @@ void Gles2Rhi::pop_render_pass()
 	{
 		RenderPassState& state = *render_pass_stack_.rbegin();
 		auto visitor = srb2::Overload {
-			[this](const DefaultRenderPassState& s) {
-				apply_default_framebuffer(false);
-			},
-			[this](const RenderPassBeginInfo& info) {
-				apply_framebuffer(info, false);
-			}
+			[this](const DefaultRenderPassState& s) { apply_default_framebuffer(false); },
+			[this](const RenderPassBeginInfo& info) { apply_framebuffer(info, false); }
 		};
 		std::visit(visitor, state);
 	}
@@ -873,7 +867,13 @@ void Gles2Rhi::bind_program(Handle<Program> program)
 	}
 }
 
-void Gles2Rhi::bind_vertex_attrib(const char* name, Handle<Buffer> buffer, VertexAttributeFormat format, uint32_t offset, uint32_t stride)
+void Gles2Rhi::bind_vertex_attrib(
+	const char* name,
+	Handle<Buffer> buffer,
+	VertexAttributeFormat format,
+	uint32_t offset,
+	uint32_t stride
+)
 {
 	SRB2_ASSERT(current_program_.has_value());
 	SRB2_ASSERT(buffer_slab_.is_valid(buffer));
@@ -1210,7 +1210,7 @@ void Gles2Rhi::draw_indexed(uint32_t index_count, uint32_t first_index)
 		map_primitive_mode(current_primitive_type_),
 		index_count,
 		GL_UNSIGNED_SHORT,
-		(const void*)((size_t)first_index * 2 + index_buffer_offset_)
+		(const void*) ((size_t) first_index * 2 + index_buffer_offset_)
 	);
 	GL_ASSERT;
 }
@@ -1230,10 +1230,9 @@ void Gles2Rhi::read_pixels(const Rect& rect, PixelFormat format, tcb::span<std::
 
 	Rect src_dim;
 	auto render_pass_visitor = srb2::Overload {
-		[&](const DefaultRenderPassState& state) {
-			src_dim = platform_->get_default_framebuffer_dimensions();
-		},
-		[&](const RenderPassBeginInfo& state) {
+		[&](const DefaultRenderPassState& state) { src_dim = platform_->get_default_framebuffer_dimensions(); },
+		[&](const RenderPassBeginInfo& state)
+		{
 			SRB2_ASSERT(texture_slab_.is_valid(state.color_attachment));
 			auto& attach_tex = texture_slab_[state.color_attachment];
 			src_dim = {0, 0, attach_tex.desc.width, attach_tex.desc.height};
@@ -1360,17 +1359,13 @@ void Gles2Rhi::finish()
 {
 	for (auto& fbset : framebuffers_)
 	{
-		gl_->DeleteFramebuffers(1, (GLuint*)&fbset.second);
+		gl_->DeleteFramebuffers(1, (GLuint*) &fbset.second);
 		GL_ASSERT;
 	}
 	framebuffers_.clear();
 }
 
-void Gles2Rhi::copy_framebuffer_to_texture(
-	Handle<Texture> dst_tex,
-	const Rect& dst_region,
-	const Rect& src_region
-)
+void Gles2Rhi::copy_framebuffer_to_texture(Handle<Texture> dst_tex, const Rect& dst_region, const Rect& src_region)
 {
 	SRB2_ASSERT(render_pass_stack_.empty() == false);
 	SRB2_ASSERT(texture_slab_.is_valid(dst_tex));
@@ -1385,10 +1380,9 @@ void Gles2Rhi::copy_framebuffer_to_texture(
 
 	Rect src_dim;
 	auto render_pass_visitor = srb2::Overload {
-		[&](const DefaultRenderPassState& state) {
-			src_dim = platform_->get_default_framebuffer_dimensions();
-		},
-		[&](const RenderPassBeginInfo& state) {
+		[&](const DefaultRenderPassState& state) { src_dim = platform_->get_default_framebuffer_dimensions(); },
+		[&](const RenderPassBeginInfo& state)
+		{
 			SRB2_ASSERT(texture_slab_.is_valid(state.color_attachment));
 			auto& attach_tex = texture_slab_[state.color_attachment];
 			src_dim = {0, 0, attach_tex.desc.width, attach_tex.desc.height};
@@ -1403,11 +1397,20 @@ void Gles2Rhi::copy_framebuffer_to_texture(
 
 	gl_->BindTexture(GL_TEXTURE_2D, tex.texture);
 	GL_ASSERT;
-	gl_->CopyTexSubImage2D(GL_TEXTURE_2D, 0, dst_region.x, dst_region.y, src_region.x, src_region.y, dst_region.w, dst_region.h);
+	gl_->CopyTexSubImage2D(
+		GL_TEXTURE_2D,
+		0,
+		dst_region.x,
+		dst_region.y,
+		src_region.x,
+		src_region.y,
+		dst_region.w,
+		dst_region.h
+	);
 	GL_ASSERT;
 }
 
 void rhi::load_gles2(Gles2LoadFunc func)
 {
-	(void)func;
+	(void) func;
 }

@@ -531,7 +531,15 @@ typedef enum
 	DISCLAIMER_SLIDE,
 	DISCLAIMER_FINAL,
 	DISCLAIMER_OUT,
+	DISCLAIMER_CREEPY_GLITCH,
+	DISCLAIMER_CREEPY_TERMINAL,
 } disclaimerstate;
+
+// Creepypasta state tracking
+static boolean g_creepypasta_mode = false;
+static char g_creepypasta_terminal_input[64] = {0};
+static UINT16 g_creepypasta_glitch_tics = 0;
+static UINT32 g_creepypasta_cursor_blink = 0;
 
 static disclaimerstate dc_state = 0;
 static UINT16 dc_tics = 0;
@@ -773,11 +781,52 @@ static void F_DisclaimerDrawScene(void)
 	if (dc_state == DISCLAIMER_FADE && dc_segaframe == 23) // Solid blue SEGA
 	{
 		F_DisclaimerAdvanceState();
-		Music_Play("lawyer");
+		if (g_creepypasta_mode)
+		{
+			S_StartSound(NULL, sfx_alarmi);
+			S_StartSound(NULL, sfx_s3kb8);
+			S_StartSound(NULL, sfx_fizzle);
+		}
+		else
+		{
+			Music_Play("lawyer");
+		}
 	}
 
-	if (dc_state == DISCLAIMER_SOUNDHOLD && dc_tics == TICRATE*2-5)
-		F_DisclaimerAdvanceState();
+	if (dc_state == DISCLAIMER_SOUNDHOLD)
+	{
+		if (!g_creepypasta_mode && dc_tics >= 12)
+		{
+			Music_StopAll();
+			dc_state = DISCLAIMER_CREEPY_GLITCH;
+			dc_tics = 0;
+			S_StartSound(NULL, sfx_fizzle);
+			S_StartSound(NULL, sfx_s3k83);
+		}
+		else if (dc_tics >= TICRATE*2-5)
+		{
+			F_DisclaimerAdvanceState();
+		}
+	}
+
+	if (dc_state == DISCLAIMER_CREEPY_GLITCH)
+	{
+		if ((dc_tics % 8) == 0)
+			S_StartSound(NULL, sfx_s3k44);
+		if (dc_tics >= 45)
+		{
+			dc_state = DISCLAIMER_CREEPY_TERMINAL;
+			dc_tics = 0;
+			g_creepypasta_terminal_input[0] = '\0';
+			S_StartSound(NULL, sfx_kc46);
+		}
+	}
+
+	if (dc_state == DISCLAIMER_CREEPY_TERMINAL)
+	{
+		// Waiting for player to type 'ringracers'
+		return;
+	}
 
 	if (dc_state == DISCLAIMER_SLIDE && dc_segaframe == 37) // End of animation
 		F_DisclaimerAdvanceState();
@@ -1073,6 +1122,58 @@ boolean F_IntroResponder(event_t *event)
 {
 	INT32 key = event->data1;
 
+	if (intro_scenenum == INTROSCENE_DISCLAIMER && dc_state == DISCLAIMER_CREEPY_TERMINAL)
+	{
+		if (event->type != ev_keydown)
+			return false;
+
+		if (key == KEY_BACKSPACE || key == 127)
+		{
+			size_t len = strlen(g_creepypasta_terminal_input);
+			if (len > 0)
+			{
+				g_creepypasta_terminal_input[len - 1] = '\0';
+				S_StartSound(NULL, sfx_tink);
+			}
+			return true;
+		}
+
+		if (key == KEY_ENTER || key == '\r' || key == '\n' || key == KEY_JOY1)
+		{
+			if (stricmp(g_creepypasta_terminal_input, "ringracers") == 0 ||
+			    stricmp(g_creepypasta_terminal_input, "ring racers") == 0 ||
+			    stricmp(g_creepypasta_terminal_input, "ring") == 0)
+			{
+				g_creepypasta_mode = true;
+				dc_state = 0;
+				dc_tics = 0;
+				dc_segaframe = 1;
+				intro_curtime = 0;
+				timetonext = introscenetime[intro_scenenum];
+				S_StartSound(NULL, sfx_kc46);
+				S_StartSound(NULL, sfx_s3k65);
+			}
+			else
+			{
+				S_StartSound(NULL, sfx_s3k72);
+			}
+			return true;
+		}
+
+		if (key >= 32 && key <= 126)
+		{
+			size_t len = strlen(g_creepypasta_terminal_input);
+			if (len < sizeof(g_creepypasta_terminal_input) - 1)
+			{
+				g_creepypasta_terminal_input[len] = (char)tolower(key);
+				g_creepypasta_terminal_input[len + 1] = '\0';
+				S_StartSound(NULL, sfx_s3kb8);
+			}
+			return true;
+		}
+		return true;
+	}
+
 	// remap virtual keys (mouse & joystick buttons)
 	if (event->type == ev_gamepad_axis && key >= JOYANALOGS
 		&& (abs(event->data2) > JOYAXISRANGE/2 || abs(event->data3) > JOYAXISRANGE/2))
@@ -1133,7 +1234,7 @@ boolean F_IntroResponder(event_t *event)
 				break;
 			case KEY_LEFTARROW:
 				AdvanceSkipSequences(4);
-				break;					
+				break;
 		}
 	}
 
@@ -1913,7 +2014,15 @@ void F_TitleScreenDrawer(void)
 	boolean hidepics = false;
 
 	// Draw that sky!
-	if (cache_gametrulystarted == false)
+	if (g_creepypasta_mode)
+	{
+		V_DrawFill(0, 0, BASEVIDWIDTH, BASEVIDHEIGHT, 31);
+		if ((finalecount % 8) < 2)
+		{
+			V_DrawFill(0, (finalecount * 7) % BASEVIDHEIGHT, BASEVIDWIDTH, 2, 35);
+		}
+	}
+	else if (cache_gametrulystarted == false)
 	{
 		V_DrawFill(0, 0, BASEVIDWIDTH, BASEVIDHEIGHT, 31);
 	}
@@ -2033,25 +2142,56 @@ void F_TitleScreenDrawer(void)
 				skincolornum_t tailsColor = SKINCOLOR_ORANGE;
 				UINT8 *tailsColormap = NULL;
 
-				if (eggSkin != -1)
+				if (g_creepypasta_mode)
 				{
-					eggColor = skins[eggSkin]->prefcolor;
+					eggColor = SKINCOLOR_JET;
+					tailsColor = SKINCOLOR_CRIMSON;
+				}
+				else
+				{
+					if (eggSkin != -1)
+					{
+						eggColor = skins[eggSkin]->prefcolor;
+					}
+					if (tailsSkin != -1)
+					{
+						tailsColor = skins[tailsSkin]->prefcolor;
+					}
 				}
 				eggColormap = R_GetTranslationColormap(TC_DEFAULT, eggColor, GTC_MENUCACHE);
-
-				if (tailsSkin != -1)
-				{
-					tailsColor = skins[tailsSkin]->prefcolor;
-				}
 				tailsColormap = R_GetTranslationColormap(TC_DEFAULT, tailsColor, GTC_MENUCACHE);
 
-				V_DrawFixedPatch(0, 0, FRACUNIT, 0, kts_tails_tails, tailsColormap);
-				V_DrawFixedPatch(0, 0, FRACUNIT, V_ADD, kts_electricity[finalecount % 6], NULL);
+				INT32 tails_jitter_x = 0;
+				INT32 tails_jitter_y = 0;
+				INT32 egg_jitter_x = 0;
 
-				V_DrawFixedPatch(0, 0, FRACUNIT, 0, kts_eggman, eggColormap);
-				V_DrawFixedPatch(0, 0, FRACUNIT, 0, kts_tails, tailsColormap);
+				if (g_creepypasta_mode)
+				{
+					tails_jitter_x = ((finalecount % 4) < 2) ? -1 : 1;
+					tails_jitter_y = ((finalecount % 6) < 3) ? 1 : -1;
+					egg_jitter_x = ((finalecount % 8) < 4) ? 1 : 0;
+				}
+
+				V_DrawFixedPatch(tails_jitter_x * FRACUNIT, tails_jitter_y * FRACUNIT, FRACUNIT, 0, kts_tails_tails, tailsColormap);
+
+				if (g_creepypasta_mode)
+				{
+					V_DrawFixedPatch(0, 0, FRACUNIT, V_REDMAP | V_ADD, kts_electricity[finalecount % 6], NULL);
+				}
+				else
+				{
+					V_DrawFixedPatch(0, 0, FRACUNIT, V_ADD, kts_electricity[finalecount % 6], NULL);
+				}
+
+				V_DrawFixedPatch(egg_jitter_x * FRACUNIT, 0, FRACUNIT, 0, kts_eggman, eggColormap);
+				V_DrawFixedPatch(tails_jitter_x * FRACUNIT, tails_jitter_y * FRACUNIT, FRACUNIT, 0, kts_tails, tailsColormap);
 
 				V_DrawFixedPatch(0, 0, FRACUNIT, 0, kts_bumper, NULL);
+
+				if (g_creepypasta_mode)
+				{
+					V_DrawCenteredThinString(BASEVIDWIDTH/2, 185, V_REDMAP, "THE RING CONSUMES ALL");
+				}
 			}
 
 			break;
