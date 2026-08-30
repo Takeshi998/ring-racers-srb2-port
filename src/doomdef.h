@@ -439,7 +439,9 @@ enum {
 };
 
 // Name of local directory for config files and savegames
-#if (((defined (__unix__) && !defined (MSDOS)) || defined (UNIXCOMMON)) && !defined (__CYGWIN__)) && !defined (__APPLE__)
+#if defined(__ANDROID__) || defined(ANDROID)
+#define DEFAULTDIR "RingRacers"
+#elif (((defined (__unix__) && !defined (MSDOS)) || defined (UNIXCOMMON)) && !defined (__CYGWIN__)) && !defined (__APPLE__)
 #define DEFAULTDIR ".ringracers"
 #else
 #define DEFAULTDIR "ringracers"

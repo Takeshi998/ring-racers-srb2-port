@@ -2,6 +2,7 @@ package org.kartkrew.ringracers;
 
 import android.content.Context;
 import android.content.res.AssetManager;
+import android.os.Environment;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -74,12 +75,19 @@ final class AssetExtractor {
     }
 
     static File prepareUserHome(Context context) throws IOException {
-        File userRoot = new File(context.getFilesDir(), "user");
-        File gameHome = new File(userRoot, ".ringracers");
-        if (!gameHome.mkdirs() && !gameHome.isDirectory()) {
-            throw new IOException("Could not create " + gameHome);
+        File storageRoot = Environment.getExternalStorageDirectory();
+        if (storageRoot == null || !storageRoot.canWrite()) {
+            storageRoot = context.getExternalFilesDir(null);
         }
-        return userRoot;
+        if (storageRoot == null) {
+            storageRoot = context.getFilesDir();
+        }
+
+        File ringRacersDir = new File(storageRoot, "RingRacers");
+        File addonsDir = new File(ringRacersDir, "addons");
+        ringRacersDir.mkdirs();
+        addonsDir.mkdirs();
+        return storageRoot;
     }
 
     private static boolean isCurrent(File marker, File gameDirectory) {

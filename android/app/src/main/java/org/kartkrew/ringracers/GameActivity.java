@@ -1,6 +1,7 @@
 package org.kartkrew.ringracers;
 
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.KeyEvent;
@@ -24,13 +25,25 @@ public final class GameActivity extends SDLActivity {
     @Override
     protected String[] getArguments() {
         File gameDirectory = new File(getFilesDir(), "game");
-        File userRoot = new File(getFilesDir(), "user");
-        new File(userRoot, ".ringracers").mkdirs();
-        new File(userRoot, ".ringracers/addons").mkdirs();
-        new File(userRoot, "addons").mkdirs();
+
+        // Use external storage (internal shared storage /sdcard) if accessible,
+        // so users can access /sdcard/RingRacers and /sdcard/RingRacers/addons in their file manager.
+        File storageRoot = Environment.getExternalStorageDirectory();
+        if (storageRoot == null || !storageRoot.canWrite()) {
+            storageRoot = getExternalFilesDir(null);
+        }
+        if (storageRoot == null) {
+            storageRoot = getFilesDir();
+        }
+
+        File ringRacersDir = new File(storageRoot, "RingRacers");
+        File addonsDir = new File(ringRacersDir, "addons");
+        ringRacersDir.mkdirs();
+        addonsDir.mkdirs();
+
         return new String[]{
             "-waddir", gameDirectory.getAbsolutePath(),
-            "-home", userRoot.getAbsolutePath()
+            "-home", storageRoot.getAbsolutePath()
         };
     }
 
