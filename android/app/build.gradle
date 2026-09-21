@@ -95,7 +95,8 @@ android {
 
     defaultConfig {
         applicationId "org.kartkrew.ringracers"
-        minSdk 26
+        def minApi = (System.getenv("MIN_SDK") ?: "28").toInteger()
+        minSdk minApi
         targetSdk 34
         def verCode = (System.getenv("VERSION_CODE") ?: "2406").toInteger()
         def verName = System.getenv("APP_VERSION_NAME") ?: "2.4-android-10"

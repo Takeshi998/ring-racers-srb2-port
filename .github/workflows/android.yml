@@ -26,13 +26,15 @@ jobs:
           - name: arm64
             abi: arm64-v8a
             triplet: arm64-android
-            overlay: android/triplets
+            overlay: ""
+            min_sdk: "28"
             version_code: "2406"
             version_name: "2.4-android-10"
           - name: arm32
             abi: armeabi-v7a
             triplet: arm-android
             overlay: android/triplets
+            min_sdk: "26"
             version_code: "2407"
             version_name: "2.4-android-10-arm32"
     steps:
@@ -106,6 +108,7 @@ jobs:
           VCPKG_OVERLAY_TRIPLETS: ${{ matrix.overlay != '' && format('{0}/{1}', github.workspace, matrix.overlay) || '' }}
           RINGRACERS_ASSETS: ${{ github.workspace }}/rr-assets
           ANDROID_ABI_FILTERS: ${{ matrix.abi }}
+          MIN_SDK: ${{ matrix.min_sdk }}
           VERSION_CODE: ${{ matrix.version_code }}
           APP_VERSION_NAME: ${{ matrix.version_name }}
         run: |
