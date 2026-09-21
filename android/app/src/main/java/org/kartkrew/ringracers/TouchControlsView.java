@@ -111,18 +111,20 @@ final class TouchControlsView extends View {
             Color.rgb(142, 68, 173), ElementKind.CHAT);
 
         // Extra buttons. RANK (TAB) works out of the box (gc_rankings default).
-        // CONSOLE (`), LUA1/2/3 (F1/F2/F3) must be bound in-game under
+        // CONSOLE (`), LUA 1/2/3 ('1'/'2'/'3') must be bound in-game under
         // Options > Controls if the build has no default for them
         // (gc_console default only exists in DEVELOP builds, gc_lua1-3 have none).
+        // SDL maps scancodes 1..9 to '1'..'9' (src/sdl/i_video.cpp) and nothing
+        // uses those keys by default, so they are safe slots for mod actions.
         TouchElement rank = new TouchElement("rank", "RANK", "TAB", KeyEvent.KEYCODE_TAB, 0.06f, 0.22f, 0.055f,
             Color.rgb(52, 120, 140), ElementKind.ACTION);
         TouchElement console = new TouchElement("console", "CON", "`", KeyEvent.KEYCODE_GRAVE, 0.145f, 0.22f, 0.055f,
             Color.rgb(60, 60, 66), ElementKind.ACTION);
-        TouchElement lua1 = new TouchElement("lua1", "LUA1", "F1", KeyEvent.KEYCODE_F1, 0.06f, 0.37f, 0.052f,
+        TouchElement lua1 = new TouchElement("lua1", "1", "1", KeyEvent.KEYCODE_1, 0.06f, 0.37f, 0.052f,
             Color.rgb(128, 90, 160), ElementKind.ACTION);
-        TouchElement lua2 = new TouchElement("lua2", "LUA2", "F2", KeyEvent.KEYCODE_F2, 0.145f, 0.37f, 0.052f,
+        TouchElement lua2 = new TouchElement("lua2", "2", "2", KeyEvent.KEYCODE_2, 0.145f, 0.37f, 0.052f,
             Color.rgb(128, 90, 160), ElementKind.ACTION);
-        TouchElement lua3 = new TouchElement("lua3", "LUA3", "F3", KeyEvent.KEYCODE_F3, 0.102f, 0.50f, 0.052f,
+        TouchElement lua3 = new TouchElement("lua3", "3", "3", KeyEvent.KEYCODE_3, 0.102f, 0.50f, 0.052f,
             Color.rgb(128, 90, 160), ElementKind.ACTION);
         // Cruise: latching GO. Single tap toggles a held KEYCODE_A so the kart
         // accelerates without keeping a finger down. Tap again to release.

@@ -28,12 +28,14 @@ import java.util.concurrent.Executors;
 public final class MainActivity extends Activity {
     private static final int REQUEST_STORAGE_LEGACY = 1001;
     private static final int REQUEST_MANAGE_STORAGE = 1002;
+    private static final int REQUEST_OPEN_TREE = 1003;
     private final ExecutorService extractor = Executors.newSingleThreadExecutor();
     private ProgressBar progress;
     private TextView status;
     private TextView pathView;
     private Button retry;
     private Button permissionButton;
+    private Button folderButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -107,6 +109,14 @@ public final class MainActivity extends Activity {
         permParams.topMargin = dp(12);
         root.addView(permissionButton, permParams);
 
+        folderButton = new Button(this);
+        folderButton.setText("Elegir carpeta");
+        folderButton.setAllCaps(false);
+        folderButton.setOnClickListener(view -> pickFolder());
+        LinearLayout.LayoutParams folderParams = new LinearLayout.LayoutParams(dp(240), dp(48));
+        folderParams.topMargin = dp(12);
+        root.addView(folderButton, folderParams);
+
         pathView = new TextView(this);
         pathView.setText("");
         pathView.setTextColor(Color.rgb(140, 150, 160));
@@ -144,6 +154,66 @@ public final class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_MANAGE_STORAGE) {
             prepareGame();
+        } else if (requestCode == REQUEST_OPEN_TREE && resultCode == RESULT_OK && data != null
+                && data.getData() != null) {
+            onFolderPicked(data);
+        }
+    }
+
+    /** Lets the user pick the storage root (default: /sdcard). Engine appends RingRacers. */
+    private void pickFolder() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            startActivityForResult(intent, REQUEST_OPEN_TREE);
+        } catch (Exception e) {
+            status.setText("Sin selector de carpetas: " + e.getMessage());
+        }
+    }
+
+    private void onFolderPicked(Intent data) {
+        android.net.Uri tree = data.getData();
+        try {
+            getContentResolver().takePersistableUriPermission(tree,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        } catch (Exception ignored) {
+        }
+        File realPath = resolvePrimaryPath(tree);
+        if (realPath != null) {
+            StorageHelper.setCustomRoot(this, realPath);
+            status.setText("Carpeta: " + realPath.getAbsolutePath());
+            prepareGame();
+        } else {
+            status.setText("No se pudo usar esa carpeta (solo almacenamiento principal).");
+        }
+    }
+
+    /**
+     * Resolves a SAF tree URI to a real path, primary volume only
+     * ({@code primary:Rel/Path} -> {@code /storage/emulated/0/Rel/Path}).
+     * The native engine needs a filesystem path, so SD cards / OTG that the
+     * OS does not expose by path cannot be used.
+     */
+    private File resolvePrimaryPath(android.net.Uri tree) {
+        try {
+            String docId = android.provider.DocumentsContract.getTreeDocumentId(tree);
+            if (docId == null || !docId.startsWith("primary:")) {
+                return null;
+            }
+            String rel = docId.substring("primary:".length());
+            File base = Environment.getExternalStorageDirectory();
+            if (base == null) {
+                return null;
+            }
+            File dir = rel.isEmpty() ? base : new File(base, rel);
+            if (!dir.mkdirs() && !dir.isDirectory()) {
+                return null;
+            }
+            return dir.canWrite() ? dir : null;
+        } catch (Exception e) {
+            return null;
         }
     }
 

@@ -16,6 +16,9 @@ GLES2 renderer.
     folder to open in the file manager / over USB to copy mods.
   - Fallback (private): app-specific external dir, then internal files dir.
     The game and mod auto-downloads still work, but the folder is not browsable.
+- Optional: the loading screen has "Elegir carpeta" to pick a different storage
+  root (primary storage only — the native engine needs a real filesystem path,
+  so SD/OTG without OS path mapping won't work). Default stays `/sdcard`.
 
 The APK only bundles core runtime assets (see `stageGameAssets` in
 `app/build.gradle`). It never packages `ringconfig.cfg`, profiles, replays,
@@ -43,8 +46,8 @@ Extra buttons (left cluster, draggable in EDIT mode):
 - `CON` (`` ` ``): console. In release builds `gc_console` has no default
   (`src/g_input.c` only binds it under `DEVELOP`), so bind it once in
   Options > Controls if needed.
-- `LUA1/2/3` (`F1/F2/F3`): mod actions `gc_lua1..3`, no keyboard default —
-  bind them in Options > Controls per mod.
+- `LUA1/2/3` (`1`/`2`/`3`): mod actions `gc_lua1..3`, no keyboard default —
+  bind them in Options > Controls per mod (keys `1`..`3` are free by default).
 - `CRUISE` (`AUTO`, bottom-right): latching GO. One tap holds acceleration
   (`KEYCODE_A` ref-counted, coexists with the physical GO button), another tap
   releases. Auto-releases on pause/focus loss. Positions are per-`id` in

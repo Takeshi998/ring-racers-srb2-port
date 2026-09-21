@@ -24,8 +24,31 @@ final class StorageHelper {
     static final String GAME_DIR_NAME = "RingRacers";
     static final String ADDONS_DIR_NAME = "addons";
     static final String DOWNLOADS_DIR_NAME = "downloads";
+    private static final String PREFS_NAME = "ringracers_storage";
+    private static final String KEY_CUSTOM_ROOT = "custom_root";
 
     private StorageHelper() {
+    }
+
+    /** User-picked storage root (folder picker), or null. */
+    static File getCustomRoot(Context context) {
+        String path = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_CUSTOM_ROOT, null);
+        if (path == null || path.isEmpty()) {
+            return null;
+        }
+        File dir = new File(path);
+        return (dir.isDirectory() && dir.canWrite()) ? dir : null;
+    }
+
+    static void setCustomRoot(Context context, File root) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString(KEY_CUSTOM_ROOT, root.getAbsolutePath()).apply();
+    }
+
+    static void clearCustomRoot(Context context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().remove(KEY_CUSTOM_ROOT).apply();
     }
 
     static boolean hasSharedAccess() {
@@ -38,6 +61,10 @@ final class StorageHelper {
 
     /** Best storage root to pass as {@code -home}. Never null. */
     static File resolveStorageRoot(Context context) {
+        File custom = getCustomRoot(context);
+        if (custom != null) {
+            return custom;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (Environment.isExternalStorageManager()) {
                 File shared = Environment.getExternalStorageDirectory();
