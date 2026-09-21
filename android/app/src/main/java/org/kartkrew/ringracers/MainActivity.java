@@ -365,9 +365,12 @@ public final class MainActivity extends Activity {
                 File gameDir = StorageHelper.getGameDir(storageRoot);
                 final boolean shared = StorageHelper.hasSharedAccess();
                 final String lastError = readLastError(gameDir);
+                final String loadingCrash = lastError == null ? readMarker(gameDir, "loading.txt") : null;
                 runOnUiThread(() -> {
                     if (lastError != null) {
                         showLastError(gameDir, lastError);
+                    } else if (loadingCrash != null) {
+                        showLoadingCrash(gameDir, loadingCrash);
                     } else {
                         showReady(gameDir, shared);
                     }
@@ -394,9 +397,23 @@ public final class MainActivity extends Activity {
         playButton.setVisibility(View.VISIBLE);
     }
 
+    /** Shows which addon was loading when a hard crash killed the game. */
+    private void showLoadingCrash(File gameDir, String fileName) {
+        progress.setVisibility(View.GONE);
+        status.setText("Se cerró cargando:\n" + fileName);
+        pathView.setText(tr("data") + gameDir.getAbsolutePath()
+            + "\n" + tr("addons") + new File(gameDir, "addons").getAbsolutePath());
+        playButton.setVisibility(View.VISIBLE);
+    }
+
     /** Reads srb2home/last-error.txt written by native I_Error (null if none). */
     private String readLastError(File gameDir) {
-        File marker = new File(gameDir, "last-error.txt");
+        return readMarker(gameDir, "last-error.txt");
+    }
+
+    /** Reads a small text marker from the game dir (null if none). Deletes it. */
+    private String readMarker(File gameDir, String name) {
+        File marker = new File(gameDir, name);
         if (!marker.isFile() || marker.length() == 0 || marker.length() > 8192) {
             return null;
         }

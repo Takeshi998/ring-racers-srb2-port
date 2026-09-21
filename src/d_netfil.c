@@ -665,7 +665,44 @@ boolean CL_LoadServerFiles(void)
 			continue; // Already loaded
 		else if (fileneeded[i].status == FS_FOUND)
 		{
+#ifdef ANDROID
+			/* Crash marker: a hard crash (segfault/LMK kill) while loading
+			 * leaves loading.txt behind, so the loader screen can report
+			 * WHICH addon killed the game. Deleted right after a clean load. */
+			{
+				if (srb2home[0] != '\0' && strcmp(srb2home, ".") != 0)
+				{
+					char loadpath[768];
+					const char *base = fileneeded[i].filename;
+					const char *p;
+					snprintf(loadpath, sizeof loadpath, "%s/loading.txt", srb2home);
+					loadpath[sizeof loadpath - 1] = '\0';
+					for (p = base; *p; p++)
+						if (*p == '/' || *p == '\\' || *p == ':')
+							base = p + 1;
+					{
+						FILE *loadfile = fopen(loadpath, "w");
+						if (loadfile)
+						{
+							fputs(base, loadfile);
+							fclose(loadfile);
+						}
+					}
+				}
+			}
+#endif
 			P_PartialAddWadFile(fileneeded[i].filename);
+#ifdef ANDROID
+			{
+				if (srb2home[0] != '\0' && strcmp(srb2home, ".") != 0)
+				{
+					char loadpath[768];
+					snprintf(loadpath, sizeof loadpath, "%s/loading.txt", srb2home);
+					loadpath[sizeof loadpath - 1] = '\0';
+					remove(loadpath);
+				}
+			}
+#endif
 			G_SetGameModified(true, false);
 			fileneeded[i].status = FS_OPEN;
 			return false;
