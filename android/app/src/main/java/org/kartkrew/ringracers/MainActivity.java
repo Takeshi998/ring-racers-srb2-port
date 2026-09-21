@@ -364,7 +364,14 @@ public final class MainActivity extends Activity {
                 File storageRoot = AssetExtractor.prepareUserHome(this);
                 File gameDir = StorageHelper.getGameDir(storageRoot);
                 final boolean shared = StorageHelper.hasSharedAccess();
-                runOnUiThread(() -> showReady(gameDir, shared));
+                final String lastError = readLastError(gameDir);
+                runOnUiThread(() -> {
+                    if (lastError != null) {
+                        showLastError(gameDir, lastError);
+                    } else {
+                        showReady(gameDir, shared);
+                    }
+                });
             } catch (IOException exception) {
                 runOnUiThread(() -> {
                     status.setText(exception.getMessage());
@@ -378,9 +385,41 @@ public final class MainActivity extends Activity {
         });
     }
 
-    /** Ready screen: user picks folder (optional) and taps Jugar. No auto-launch. */
-    private void showReady(File gameDir, boolean shared) {
+    /** Shows a fatal error left by the previous run (native I_Error). */
+    private void showLastError(File gameDir, String lastError) {
         progress.setVisibility(View.GONE);
+        status.setText("Último error:\n" + lastError);
+        pathView.setText(tr("data") + gameDir.getAbsolutePath()
+            + "\n" + tr("addons") + new File(gameDir, "addons").getAbsolutePath());
+        playButton.setVisibility(View.VISIBLE);
+    }
+
+    /** Reads srb2home/last-error.txt written by native I_Error (null if none). */
+    private String readLastError(File gameDir) {
+        File marker = new File(gameDir, "last-error.txt");
+        if (!marker.isFile() || marker.length() == 0 || marker.length() > 8192) {
+            return null;
+        }
+        try (java.io.FileInputStream input = new java.io.FileInputStream(marker)) {
+            byte[] bytes = new byte[(int) marker.length()];
+            int offset = 0;
+            while (offset < bytes.length) {
+                int read = input.read(bytes, offset, bytes.length - offset);
+                if (read < 0) {
+                    break;
+                }
+                offset += read;
+            }
+            String text = new String(bytes, 0, offset, java.nio.charset.StandardCharsets.UTF_8).trim();
+            marker.delete();
+            return text.isEmpty() ? null : text;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** Ready screen: user picks folder (optional) and taps Jugar. No auto-launch. */
+    private void showReady(File gameDir, boolean shared) {        progress.setVisibility(View.GONE);
         final String readyMsg = (shared ? tr("ready") : tr("ready_private")) + gameDir.getAbsolutePath();
         status.setText(readyMsg);
         pathView.setText(tr("data") + gameDir.getAbsolutePath()

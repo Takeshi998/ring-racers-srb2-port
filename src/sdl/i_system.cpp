@@ -1995,6 +1995,24 @@ FUNCIERROR void ATTRNORETURN I_Error(const char *error, ...)
 	va_end(argptr);
 #ifdef ANDROID
 	__android_log_print(ANDROID_LOG_ERROR, "SRB2", "I_Error: %s", buffer);
+	// Persist for the Android loader screen: on mobile there is no visible
+	// console, so without this file a fatal error looks like an instant close.
+	// MainActivity shows last-error.txt on next launch (then deletes it).
+	{
+		extern char srb2home[256];
+		if (srb2home[0] != '\0' && strcmp(srb2home, ".") != 0)
+		{
+			char errpath[768];
+			snprintf(errpath, sizeof errpath, "%s/last-error.txt", srb2home);
+			errpath[sizeof errpath - 1] = '\0';
+			FILE *errfile = fopen(errpath, "w");
+			if (errfile)
+			{
+				fputs(buffer, errfile);
+				fclose(errfile);
+			}
+		}
+	}
 #endif
 	I_OutputMsg("\nI_Error(): %s\n", buffer);
 	// ---
