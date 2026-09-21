@@ -1,7 +1,6 @@
 package org.kartkrew.ringracers;
 
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.KeyEvent;
@@ -26,20 +25,23 @@ public final class GameActivity extends SDLActivity {
     protected String[] getArguments() {
         File gameDirectory = new File(getFilesDir(), "game");
 
-        // Use external storage (internal shared storage /sdcard) if accessible,
-        // so users can access /sdcard/RingRacers and /sdcard/RingRacers/addons in their file manager.
-        File storageRoot = Environment.getExternalStorageDirectory();
-        if (storageRoot == null || !storageRoot.canWrite()) {
-            storageRoot = getExternalFilesDir(null);
+        // Hybrid shared storage: prefer /sdcard so RingRacers/addons is visible
+        // in the file manager (needs All-files access on Android 11+).
+        // Falls back to app-specific dirs instead of crashing the engine.
+        File storageRoot = StorageHelper.resolveStorageRoot(this);
+        try {
+            StorageHelper.ensureTree(storageRoot);
+        } catch (java.io.IOException e) {
+            File fallback = getExternalFilesDir(null);
+            if (fallback == null) {
+                fallback = getFilesDir();
+            }
+            storageRoot = fallback;
+            try {
+                StorageHelper.ensureTree(storageRoot);
+            } catch (java.io.IOException ignored) {
+            }
         }
-        if (storageRoot == null) {
-            storageRoot = getFilesDir();
-        }
-
-        File ringRacersDir = new File(storageRoot, "RingRacers");
-        File addonsDir = new File(ringRacersDir, "addons");
-        ringRacersDir.mkdirs();
-        addonsDir.mkdirs();
 
         return new String[]{
             "-waddir", gameDirectory.getAbsolutePath(),

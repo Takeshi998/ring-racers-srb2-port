@@ -46,12 +46,15 @@ final class TouchControlsView extends View {
     private final Map<Integer, TouchElement> dragPointers = new HashMap<>();
     private final Map<Integer, Float> dragOffsetX = new HashMap<>();
     private final Map<Integer, Float> dragOffsetY = new HashMap<>();
+    private final Set<Integer> cruisePointers = new HashSet<>();
+    private boolean cruiseActive = false;
 
     private TouchElement dpadElement;
     private TouchElement pauseButton;
     private TouchElement keyboardButton;
     private TouchElement editButton;
     private TouchElement chatButton;
+    private TouchElement cruiseButton;
     private TouchElement resetButton;
     private TouchElement doneButton;
 
@@ -107,6 +110,25 @@ final class TouchControlsView extends View {
         chatButton = new TouchElement("chat", "CHAT", "T", KeyEvent.KEYCODE_T, 0.76f, 0.33f, 0.065f,
             Color.rgb(142, 68, 173), ElementKind.CHAT);
 
+        // Extra buttons. RANK (TAB) works out of the box (gc_rankings default).
+        // CONSOLE (`), LUA1/2/3 (F1/F2/F3) must be bound in-game under
+        // Options > Controls if the build has no default for them
+        // (gc_console default only exists in DEVELOP builds, gc_lua1-3 have none).
+        TouchElement rank = new TouchElement("rank", "RANK", "TAB", KeyEvent.KEYCODE_TAB, 0.06f, 0.22f, 0.055f,
+            Color.rgb(52, 120, 140), ElementKind.ACTION);
+        TouchElement console = new TouchElement("console", "CON", "`", KeyEvent.KEYCODE_GRAVE, 0.145f, 0.22f, 0.055f,
+            Color.rgb(60, 60, 66), ElementKind.ACTION);
+        TouchElement lua1 = new TouchElement("lua1", "LUA1", "F1", KeyEvent.KEYCODE_F1, 0.06f, 0.37f, 0.052f,
+            Color.rgb(128, 90, 160), ElementKind.ACTION);
+        TouchElement lua2 = new TouchElement("lua2", "LUA2", "F2", KeyEvent.KEYCODE_F2, 0.145f, 0.37f, 0.052f,
+            Color.rgb(128, 90, 160), ElementKind.ACTION);
+        TouchElement lua3 = new TouchElement("lua3", "LUA3", "F3", KeyEvent.KEYCODE_F3, 0.102f, 0.50f, 0.052f,
+            Color.rgb(128, 90, 160), ElementKind.ACTION);
+        // Cruise: latching GO. Single tap toggles a held KEYCODE_A so the kart
+        // accelerates without keeping a finger down. Tap again to release.
+        cruiseButton = new TouchElement("cruise", "CRUISE", "AUTO", KeyEvent.KEYCODE_A, 0.965f, 0.90f, 0.062f,
+            Color.rgb(45, 159, 93), ElementKind.CRUISE);
+
         actionButtons.add(go);
         actionButtons.add(drift);
         actionButtons.add(item);
@@ -116,6 +138,12 @@ final class TouchControlsView extends View {
         actionButtons.add(bail);
         actionButtons.add(vote);
         actionButtons.add(chatButton);
+        actionButtons.add(rank);
+        actionButtons.add(console);
+        actionButtons.add(lua1);
+        actionButtons.add(lua2);
+        actionButtons.add(lua3);
+        actionButtons.add(cruiseButton);
         allElements.addAll(actionButtons);
 
         editButton = new TouchElement("edit", "EDIT", "", 0, 0.42f, 0.085f, 0.052f,
@@ -298,6 +326,8 @@ final class TouchControlsView extends View {
                 pressed = !chatPointers.isEmpty();
             } else if (button.kind == ElementKind.EDIT) {
                 pressed = !editPointers.isEmpty();
+            } else if (button.kind == ElementKind.CRUISE) {
+                pressed = cruiseActive;
             } else {
                 pressed = isPressed(button.keyCode);
             }
@@ -539,6 +569,10 @@ final class TouchControlsView extends View {
         keyboardPointers.clear();
         chatPointers.clear();
         editPointers.clear();
+        cruisePointers.clear();
+        if (cruiseActive) {
+            cruiseActive = false;
+        }
         List<Integer> pressedKeys = new ArrayList<>(keyReferences.keySet());
         pointerKeys.clear();
         keyReferences.clear();
@@ -583,6 +617,17 @@ final class TouchControlsView extends View {
             chatPointers.remove(pointerId);
         }
 
+        // Cruise (latching GO) check: tap toggles, no hold needed.
+        boolean inCruise = cruiseButton != null && cruiseButton.contains(pointerX, pointerY);
+        if (inCruise) {
+            if (!cruisePointers.contains(pointerId)) {
+                cruisePointers.add(pointerId);
+                setCruise(!cruiseActive);
+            }
+        } else {
+            cruisePointers.remove(pointerId);
+        }
+
         Set<Integer> nextKeys = keysAt(pointerX, pointerY);
         Set<Integer> previousKeys = pointerKeys.getOrDefault(pointerId, Collections.emptySet());
 
@@ -609,11 +654,25 @@ final class TouchControlsView extends View {
         keyboardPointers.remove(pointerId);
         editPointers.remove(pointerId);
         chatPointers.remove(pointerId);
+        cruisePointers.remove(pointerId);
         Set<Integer> previousKeys = pointerKeys.remove(pointerId);
         if (previousKeys != null) {
             for (int keyCode : previousKeys) {
                 releaseKey(keyCode);
             }
+        }
+        invalidate();
+    }
+
+    private void setCruise(boolean active) {
+        if (cruiseActive == active) {
+            return;
+        }
+        cruiseActive = active;
+        if (active) {
+            pressKey(KeyEvent.KEYCODE_A);
+        } else {
+            releaseKey(KeyEvent.KEYCODE_A);
         }
         invalidate();
     }
@@ -654,9 +713,12 @@ final class TouchControlsView extends View {
         if (chatButton != null && chatButton.contains(pointerX, pointerY)) {
             return Collections.emptySet();
         }
+        if (cruiseButton != null && cruiseButton.contains(pointerX, pointerY)) {
+            return Collections.emptySet();
+        }
 
         for (TouchElement button : actionButtons) {
-            if (button != chatButton && button.contains(pointerX, pointerY)) {
+            if (button != chatButton && button.kind != ElementKind.CRUISE && button.contains(pointerX, pointerY)) {
                 return Collections.singleton(button.keyCode);
             }
         }
@@ -718,6 +780,7 @@ final class TouchControlsView extends View {
         DPAD,
         ACTION,
         CHAT,
+        CRUISE,
         KEYBOARD,
         PAUSE,
         EDIT,

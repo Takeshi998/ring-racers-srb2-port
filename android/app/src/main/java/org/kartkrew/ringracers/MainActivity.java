@@ -1,10 +1,16 @@
 package org.kartkrew.ringracers;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
@@ -14,15 +20,20 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class MainActivity extends Activity {
+    private static final int REQUEST_STORAGE_LEGACY = 1001;
+    private static final int REQUEST_MANAGE_STORAGE = 1002;
     private final ExecutorService extractor = Executors.newSingleThreadExecutor();
     private ProgressBar progress;
     private TextView status;
+    private TextView pathView;
     private Button retry;
+    private Button permissionButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,11 +98,74 @@ public final class MainActivity extends Activity {
         retryParams.topMargin = dp(20);
         root.addView(retry, retryParams);
 
+        permissionButton = new Button(this);
+        permissionButton.setText("Dar acceso a archivos");
+        permissionButton.setAllCaps(false);
+        permissionButton.setVisibility(View.GONE);
+        permissionButton.setOnClickListener(view -> requestSharedAccess());
+        LinearLayout.LayoutParams permParams = new LinearLayout.LayoutParams(dp(240), dp(48));
+        permParams.topMargin = dp(12);
+        root.addView(permissionButton, permParams);
+
+        pathView = new TextView(this);
+        pathView.setText("");
+        pathView.setTextColor(Color.rgb(140, 150, 160));
+        pathView.setTextSize(12);
+        pathView.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams pathParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        pathParams.topMargin = dp(12);
+        root.addView(pathView, pathParams);
+
         return root;
+    }
+
+    private void requestSharedAccess() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    Uri.parse("package:" + getPackageName()));
+                startActivityForResult(intent, REQUEST_MANAGE_STORAGE);
+            } else {
+                requestPermissions(new String[]{
+                    Manifest.permission.READ_EXTERNAL_STORAGE,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE
+                }, REQUEST_STORAGE_LEGACY);
+            }
+        } catch (Exception e) {
+            status.setText("No se pudo abrir el ajuste: " + e.getMessage());
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_MANAGE_STORAGE) {
+            prepareGame();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_STORAGE_LEGACY) {
+            prepareGame();
+        }
+    }
+
+    private boolean needsSharedPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return !Environment.isExternalStorageManager();
+        }
+        return checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            != PackageManager.PERMISSION_GRANTED;
     }
 
     private void prepareGame() {
         retry.setVisibility(View.GONE);
+        permissionButton.setVisibility(View.GONE);
         progress.setVisibility(View.VISIBLE);
         status.setText("Preparing game data");
 
@@ -102,8 +176,17 @@ public final class MainActivity extends Activity {
                     progress.setProgress(completed);
                     status.setText(name);
                 }));
-                AssetExtractor.prepareUserHome(this);
+                File storageRoot = AssetExtractor.prepareUserHome(this);
+                File gameDir = StorageHelper.getGameDir(storageRoot);
+                final boolean shared = StorageHelper.hasSharedAccess();
                 runOnUiThread(() -> {
+                    // Game launches in both modes; shared mode gives the visible
+                    // /sdcard/RingRacers folder, private mode keeps mods working
+                    // (auto-download) without extra permissions.
+                    status.setText(shared ? "Listo: " + gameDir.getAbsolutePath()
+                        : "Listo (privado): " + gameDir.getAbsolutePath());
+                    pathView.setText("Datos: " + gameDir.getAbsolutePath()
+                        + "\nAddons: " + new File(gameDir, "addons").getAbsolutePath());
                     if (!isFinishing() && !isDestroyed()) {
                         startActivity(new Intent(this, GameActivity.class));
                         finish();
@@ -114,6 +197,9 @@ public final class MainActivity extends Activity {
                     status.setText(exception.getMessage());
                     progress.setVisibility(View.GONE);
                     retry.setVisibility(View.VISIBLE);
+                    if (needsSharedPermission()) {
+                        permissionButton.setVisibility(View.VISIBLE);
+                    }
                 });
             }
         });
