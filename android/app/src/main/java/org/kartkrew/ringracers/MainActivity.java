@@ -36,6 +36,7 @@ public final class MainActivity extends Activity {
     private Button retry;
     private Button permissionButton;
     private Button folderButton;
+    private Button playButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -117,6 +118,15 @@ public final class MainActivity extends Activity {
         folderParams.topMargin = dp(12);
         root.addView(folderButton, folderParams);
 
+        playButton = new Button(this);
+        playButton.setText("Jugar");
+        playButton.setAllCaps(false);
+        playButton.setVisibility(View.GONE);
+        playButton.setOnClickListener(view -> launchGame());
+        LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(dp(240), dp(56));
+        playParams.topMargin = dp(12);
+        root.addView(playButton, playParams);
+
         pathView = new TextView(this);
         pathView.setText("");
         pathView.setTextColor(Color.rgb(140, 150, 160));
@@ -183,8 +193,13 @@ public final class MainActivity extends Activity {
         File realPath = resolvePrimaryPath(tree);
         if (realPath != null) {
             StorageHelper.setCustomRoot(this, realPath);
-            status.setText("Carpeta: " + realPath.getAbsolutePath());
-            prepareGame();
+            try {
+                File storageRoot = AssetExtractor.prepareUserHome(this);
+                showReady(StorageHelper.getGameDir(storageRoot), StorageHelper.hasSharedAccess());
+            } catch (IOException e) {
+                status.setText(e.getMessage());
+                retry.setVisibility(View.VISIBLE);
+            }
         } else {
             status.setText("No se pudo usar esa carpeta (solo almacenamiento principal).");
         }
@@ -236,6 +251,7 @@ public final class MainActivity extends Activity {
     private void prepareGame() {
         retry.setVisibility(View.GONE);
         permissionButton.setVisibility(View.GONE);
+        playButton.setVisibility(View.GONE);
         progress.setVisibility(View.VISIBLE);
         status.setText("Preparing game data");
 
@@ -249,19 +265,7 @@ public final class MainActivity extends Activity {
                 File storageRoot = AssetExtractor.prepareUserHome(this);
                 File gameDir = StorageHelper.getGameDir(storageRoot);
                 final boolean shared = StorageHelper.hasSharedAccess();
-                runOnUiThread(() -> {
-                    // Game launches in both modes; shared mode gives the visible
-                    // /sdcard/RingRacers folder, private mode keeps mods working
-                    // (auto-download) without extra permissions.
-                    status.setText(shared ? "Listo: " + gameDir.getAbsolutePath()
-                        : "Listo (privado): " + gameDir.getAbsolutePath());
-                    pathView.setText("Datos: " + gameDir.getAbsolutePath()
-                        + "\nAddons: " + new File(gameDir, "addons").getAbsolutePath());
-                    if (!isFinishing() && !isDestroyed()) {
-                        startActivity(new Intent(this, GameActivity.class));
-                        finish();
-                    }
-                });
+                runOnUiThread(() -> showReady(gameDir, shared));
             } catch (IOException exception) {
                 runOnUiThread(() -> {
                     status.setText(exception.getMessage());
@@ -273,6 +277,23 @@ public final class MainActivity extends Activity {
                 });
             }
         });
+    }
+
+    /** Ready screen: user picks folder (optional) and taps Jugar. No auto-launch. */
+    private void showReady(File gameDir, boolean shared) {
+        progress.setVisibility(View.GONE);
+        status.setText(shared ? "Listo: " + gameDir.getAbsolutePath()
+            : "Listo (privado): " + gameDir.getAbsolutePath());
+        pathView.setText("Datos: " + gameDir.getAbsolutePath()
+            + "\nAddons: " + new File(gameDir, "addons").getAbsolutePath());
+        playButton.setVisibility(View.VISIBLE);
+    }
+
+    private void launchGame() {
+        if (!isFinishing() && !isDestroyed()) {
+            startActivity(new Intent(this, GameActivity.class));
+            finish();
+        }
     }
 
     private int dp(int value) {

@@ -25,6 +25,12 @@ import java.util.Set;
 
 final class TouchControlsView extends View {
     private static final String PREFS_NAME = "ringracers_touch_controls";
+    private static final String PREFS_META = "ringracers_touch_controls_meta";
+    private static final String KEY_ACTIVE_PROFILE = "active_profile";
+    private static final int NUM_PROFILES = 3;
+    /** ids opcionales (visibles/ocultables desde el menú lateral) */
+    private static final String[] OPTIONAL_IDS = {"chat", "rank", "console", "lua1", "lua2", "lua3", "cruise"};
+    private static final String[] OPTIONAL_NAMES = {"CHAT", "RANK", "CON", "LUA 1", "LUA 2", "LUA 3", "CRUISE"};
     private static final int OUTLINE_COLOR = Color.argb(185, 255, 255, 255);
     private static final int LABEL_COLOR = Color.WHITE;
 
@@ -57,8 +63,13 @@ final class TouchControlsView extends View {
     private TouchElement cruiseButton;
     private TouchElement resetButton;
     private TouchElement doneButton;
+    private TouchElement sizeMinusButton;
+    private TouchElement sizePlusButton;
+    private TouchElement menuButton;
+    private TouchElement selectedElement;
 
     private boolean editMode = false;
+    private int activeProfile = 0;
 
     TouchControlsView(Context context) {
         super(context);
@@ -163,6 +174,14 @@ final class TouchControlsView extends View {
             Color.rgb(192, 57, 43), ElementKind.RESET);
         doneButton = new TouchElement("done", "DONE", "", 0, 0.65f, 0.085f, 0.055f,
             Color.rgb(39, 174, 96), ElementKind.DONE);
+        sizeMinusButton = new TouchElement("sizeminus", "A-", "", 0, 0.40f, 0.20f, 0.050f,
+            Color.rgb(70, 80, 95), ElementKind.SIZE_MINUS);
+        menuButton = new TouchElement("menu", "MENU", "", 0, 0.50f, 0.20f, 0.050f,
+            Color.rgb(70, 80, 95), ElementKind.MENU);
+        sizePlusButton = new TouchElement("sizeplus", "A+", "", 0, 0.60f, 0.20f, 0.050f,
+            Color.rgb(70, 80, 95), ElementKind.SIZE_PLUS);
+        activeProfile = getContext().getSharedPreferences(PREFS_META, Context.MODE_PRIVATE)
+            .getInt(KEY_ACTIVE_PROFILE, 0);
     }
 
     @Override
@@ -171,37 +190,82 @@ final class TouchControlsView extends View {
         loadLayout(width, height);
     }
 
+    private String prefsName() {
+        // Perfil 0 usa el archivo original (conserva layouts existentes).
+        return activeProfile == 0 ? PREFS_NAME : PREFS_NAME + "_p" + activeProfile;
+    }
+
+    private boolean isOptional(String id) {
+        for (String optional : OPTIONAL_IDS) {
+            if (optional.equals(id)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private TouchElement findElementById(String id) {
+        for (TouchElement element : allElements) {
+            if (element.id.equals(id)) {
+                return element;
+            }
+        }
+        return null;
+    }
+
     private void loadLayout(int width, int height) {
         if (width <= 0 || height <= 0) {
             return;
         }
-        SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        SharedPreferences prefs = getContext().getSharedPreferences(prefsName(), Context.MODE_PRIVATE);
         for (TouchElement element : allElements) {
             element.normX = prefs.getFloat(element.id + "_normX", element.defaultNormX);
             element.normY = prefs.getFloat(element.id + "_normY", element.defaultNormY);
+            element.sizeFactor = prefs.getFloat(element.id + "_size", 1f);
+            element.visible = !isOptional(element.id) || prefs.getBoolean(element.id + "_visible", true);
             element.updatePixelCoords(width, height);
         }
         resetButton.updatePixelCoords(width, height);
         doneButton.updatePixelCoords(width, height);
+        sizeMinusButton.updatePixelCoords(width, height);
+        menuButton.updatePixelCoords(width, height);
+        sizePlusButton.updatePixelCoords(width, height);
     }
 
     private void saveLayout() {
-        SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        SharedPreferences prefs = getContext().getSharedPreferences(prefsName(), Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = prefs.edit();
         for (TouchElement element : allElements) {
             editor.putFloat(element.id + "_normX", element.normX);
             editor.putFloat(element.id + "_normY", element.normY);
+            editor.putFloat(element.id + "_size", element.sizeFactor);
+            if (isOptional(element.id)) {
+                editor.putBoolean(element.id + "_visible", element.visible);
+            }
         }
         editor.apply();
     }
 
     private void resetLayout() {
-        SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        SharedPreferences prefs = getContext().getSharedPreferences(prefsName(), Context.MODE_PRIVATE);
         prefs.edit().clear().apply();
         for (TouchElement element : allElements) {
             element.resetToDefault();
             element.updatePixelCoords(getWidth(), getHeight());
         }
+        invalidate();
+    }
+
+    private void switchProfile(int profile) {
+        if (profile == activeProfile) {
+            return;
+        }
+        saveLayout();
+        activeProfile = profile;
+        getContext().getSharedPreferences(PREFS_META, Context.MODE_PRIVATE)
+            .edit().putInt(KEY_ACTIVE_PROFILE, profile).apply();
+        selectedElement = null;
+        loadLayout(getWidth(), getHeight());
         invalidate();
     }
 
@@ -212,6 +276,9 @@ final class TouchControlsView extends View {
     public void enterEditMode() {
         releaseAll();
         editMode = true;
+        if (selectedElement == null) {
+            selectedElement = dpadElement;
+        }
         dragPointers.clear();
         dragOffsetX.clear();
         dragOffsetY.clear();
@@ -229,13 +296,103 @@ final class TouchControlsView extends View {
         invalidate();
     }
 
+    private void adjustSelectedSize(float factor) {
+        if (selectedElement == null || getWidth() <= 0 || getHeight() <= 0) {
+            return;
+        }
+        selectedElement.sizeFactor = Math.max(0.5f, Math.min(2.0f, selectedElement.sizeFactor * factor));
+        selectedElement.updatePixelCoords(getWidth(), getHeight());
+        saveLayout();
+        invalidate();
+    }
+
+    /** Menú lateral: perfiles + botones extra visibles. */
+    private void openSideMenu() {
+        Context context = getContext();
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(context);
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int pad = Math.round(20 * getResources().getDisplayMetrics().density);
+        layout.setPadding(pad, pad, pad, pad);
+
+        android.widget.TextView profileTitle = new android.widget.TextView(context);
+        profileTitle.setText("Perfil de controles");
+        profileTitle.setTextSize(16);
+        layout.addView(profileTitle);
+
+        android.widget.RadioGroup profiles = new android.widget.RadioGroup(context);
+        profiles.setOrientation(android.widget.RadioGroup.HORIZONTAL);
+        for (int i = 0; i < NUM_PROFILES; i++) {
+            android.widget.RadioButton option = new android.widget.RadioButton(context);
+            option.setText("Perfil " + (i + 1));
+            option.setId(1000 + i);
+            option.setChecked(i == activeProfile);
+            profiles.addView(option);
+        }
+        layout.addView(profiles);
+
+        android.widget.TextView buttonsTitle = new android.widget.TextView(context);
+        buttonsTitle.setText("Botones extra visibles");
+        buttonsTitle.setTextSize(16);
+        buttonsTitle.setPadding(0, pad / 2, 0, 0);
+        layout.addView(buttonsTitle);
+
+        final android.widget.CheckBox[] boxes = new android.widget.CheckBox[OPTIONAL_IDS.length];
+        for (int i = 0; i < OPTIONAL_IDS.length; i++) {
+            TouchElement element = findElementById(OPTIONAL_IDS[i]);
+            android.widget.CheckBox box = new android.widget.CheckBox(context);
+            box.setText(OPTIONAL_NAMES[i]);
+            box.setChecked(element == null || element.visible);
+            boxes[i] = box;
+            layout.addView(box);
+        }
+
+        new android.app.AlertDialog.Builder(context)
+            .setTitle("Controles")
+            .setView(layout)
+            .setPositiveButton("Aplicar", (dialog, which) -> {
+                int checkedProfile = profiles.getCheckedRadioButtonId() - 1000;
+                for (int i = 0; i < OPTIONAL_IDS.length; i++) {
+                    TouchElement element = findElementById(OPTIONAL_IDS[i]);
+                    if (element != null) {
+                        element.visible = boxes[i].isChecked();
+                    }
+                }
+                saveLayout();
+                if (checkedProfile >= 0 && checkedProfile < NUM_PROFILES
+                        && checkedProfile != activeProfile) {
+                    // switchProfile guarda el perfil actual y carga el nuevo
+                    // (la visibilidad recién marcada ya quedó guardada arriba,
+                    //  se reaplica tras el cambio).
+                    boolean[] wanted = new boolean[OPTIONAL_IDS.length];
+                    for (int i = 0; i < wanted.length; i++) {
+                        wanted[i] = boxes[i].isChecked();
+                    }
+                    switchProfile(checkedProfile);
+                    for (int i = 0; i < OPTIONAL_IDS.length; i++) {
+                        TouchElement element = findElementById(OPTIONAL_IDS[i]);
+                        if (element != null) {
+                            element.visible = wanted[i];
+                        }
+                    }
+                    saveLayout();
+                }
+                invalidate();
+            })
+            .setNegativeButton("Cancelar", null)
+            .show();
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        drawDpad(canvas);
+        if (dpadElement.visible) {
+            drawDpad(canvas);
+        }
         for (TouchElement button : actionButtons) {
-            drawActionButton(canvas, button);
+            if (button.visible) {
+                drawActionButton(canvas, button);
+            }
         }
         drawActionButton(canvas, editButton);
         drawActionButton(canvas, keyboardButton);
@@ -270,6 +427,9 @@ final class TouchControlsView extends View {
 
         drawActionButton(canvas, resetButton);
         drawActionButton(canvas, doneButton);
+        drawActionButton(canvas, sizeMinusButton);
+        drawActionButton(canvas, menuButton);
+        drawActionButton(canvas, sizePlusButton);
     }
 
     private void drawDpad(Canvas canvas) {
@@ -277,7 +437,6 @@ final class TouchControlsView extends View {
         boolean rightPressed = isPressed(KeyEvent.KEYCODE_DPAD_RIGHT);
         boolean upPressed = isPressed(KeyEvent.KEYCODE_DPAD_UP);
         boolean downPressed = isPressed(KeyEvent.KEYCODE_DPAD_DOWN);
-        boolean isDragged = editMode && dragPointers.containsValue(dpadElement);
 
         fillPaint.setStyle(Paint.Style.FILL);
         fillPaint.setColor(Color.argb(92, 28, 31, 35));
@@ -285,7 +444,7 @@ final class TouchControlsView extends View {
 
         if (editMode) {
             canvas.drawCircle(dpadElement.centerX, dpadElement.centerY, dpadElement.radius,
-                isDragged ? dashedOutlinePaint : dashedOutlinePaint);
+                dpadElement == selectedElement ? dashedOutlinePaint : outlinePaint);
         } else {
             canvas.drawCircle(dpadElement.centerX, dpadElement.centerY, dpadElement.radius, outlinePaint);
         }
@@ -340,8 +499,11 @@ final class TouchControlsView extends View {
         fillPaint.setColor(Color.argb(alpha, Color.red(button.color), Color.green(button.color), Color.blue(button.color)));
         canvas.drawCircle(button.centerX, button.centerY, button.radius, fillPaint);
 
-        if (editMode && (button.kind != ElementKind.RESET && button.kind != ElementKind.DONE)) {
-            canvas.drawCircle(button.centerX, button.centerY, button.radius, dashedOutlinePaint);
+        if (editMode && (button.kind != ElementKind.RESET && button.kind != ElementKind.DONE
+                && button.kind != ElementKind.SIZE_MINUS && button.kind != ElementKind.SIZE_PLUS
+                && button.kind != ElementKind.MENU)) {
+            canvas.drawCircle(button.centerX, button.centerY, button.radius,
+                button == selectedElement ? dashedOutlinePaint : outlinePaint);
         } else {
             canvas.drawCircle(button.centerX, button.centerY, button.radius, outlinePaint);
         }
@@ -365,7 +527,9 @@ final class TouchControlsView extends View {
             return;
         }
 
-        if (button.kind == ElementKind.RESET || button.kind == ElementKind.DONE) {
+        if (button.kind == ElementKind.RESET || button.kind == ElementKind.DONE
+                || button.kind == ElementKind.SIZE_MINUS || button.kind == ElementKind.SIZE_PLUS
+                || button.kind == ElementKind.MENU) {
             float labelSize = Math.max(dp(9), button.radius * 0.36f);
             textPaint.setTextSize(labelSize);
             Paint.FontMetrics metrics = textPaint.getFontMetrics();
@@ -488,9 +652,22 @@ final class TouchControlsView extends View {
                     exitEditMode(true);
                     return true;
                 }
+                if (sizeMinusButton.contains(px, py)) {
+                    adjustSelectedSize(1f / 1.15f);
+                    return true;
+                }
+                if (sizePlusButton.contains(px, py)) {
+                    adjustSelectedSize(1.15f);
+                    return true;
+                }
+                if (menuButton.contains(px, py)) {
+                    openSideMenu();
+                    return true;
+                }
 
                 TouchElement hit = findElementAt(px, py);
                 if (hit != null && hit.kind != ElementKind.RESET && hit.kind != ElementKind.DONE) {
+                    selectedElement = hit;
                     dragPointers.put(pointerId, hit);
                     dragOffsetX.put(pointerId, hit.centerX - px);
                     dragOffsetY.put(pointerId, hit.centerY - py);
@@ -551,11 +728,11 @@ final class TouchControlsView extends View {
     private TouchElement findElementAt(float px, float py) {
         // Check buttons first (higher priority than dpad area)
         for (TouchElement element : allElements) {
-            if (element.kind != ElementKind.DPAD && element.contains(px, py)) {
+            if (element.visible && element.kind != ElementKind.DPAD && element.contains(px, py)) {
                 return element;
             }
         }
-        if (dpadElement.contains(px, py)) {
+        if (dpadElement.visible && dpadElement.contains(px, py)) {
             return dpadElement;
         }
         return null;
@@ -609,7 +786,7 @@ final class TouchControlsView extends View {
         }
 
         // Chat (T) button check
-        boolean inChat = chatButton != null && chatButton.contains(pointerX, pointerY);
+        boolean inChat = chatButton != null && chatButton.visible && chatButton.contains(pointerX, pointerY);
         if (inChat) {
             if (!chatPointers.contains(pointerId)) {
                 chatPointers.add(pointerId);
@@ -620,7 +797,7 @@ final class TouchControlsView extends View {
         }
 
         // Cruise (latching GO) check: tap toggles, no hold needed.
-        boolean inCruise = cruiseButton != null && cruiseButton.contains(pointerX, pointerY);
+        boolean inCruise = cruiseButton != null && cruiseButton.visible && cruiseButton.contains(pointerX, pointerY);
         if (inCruise) {
             if (!cruisePointers.contains(pointerId)) {
                 cruisePointers.add(pointerId);
@@ -712,7 +889,7 @@ final class TouchControlsView extends View {
         if (editButton != null && editButton.contains(pointerX, pointerY)) {
             return Collections.emptySet();
         }
-        if (chatButton != null && chatButton.contains(pointerX, pointerY)) {
+        if (chatButton != null && chatButton.visible && chatButton.contains(pointerX, pointerY)) {
             return Collections.emptySet();
         }
         if (cruiseButton != null && cruiseButton.contains(pointerX, pointerY)) {
@@ -720,7 +897,7 @@ final class TouchControlsView extends View {
         }
 
         for (TouchElement button : actionButtons) {
-            if (button != chatButton && button.kind != ElementKind.CRUISE && button.contains(pointerX, pointerY)) {
+            if (button.visible && button != chatButton && button.kind != ElementKind.CRUISE && button.contains(pointerX, pointerY)) {
                 return Collections.singleton(button.keyCode);
             }
         }
@@ -787,7 +964,10 @@ final class TouchControlsView extends View {
         PAUSE,
         EDIT,
         RESET,
-        DONE
+        DONE,
+        SIZE_MINUS,
+        SIZE_PLUS,
+        MENU
     }
 
     private static final class TouchElement {
@@ -806,6 +986,8 @@ final class TouchControlsView extends View {
         float centerX;
         float centerY;
         float radius;
+        float sizeFactor;
+        boolean visible;
 
         TouchElement(String id, String label, String code, int keyCode, float defaultNormX,
                      float defaultNormY, float defaultRadiusScale, int color, ElementKind kind) {
@@ -820,21 +1002,25 @@ final class TouchControlsView extends View {
             this.kind = kind;
             this.normX = defaultNormX;
             this.normY = defaultNormY;
+            this.sizeFactor = 1f;
+            this.visible = true;
         }
 
         void updatePixelCoords(int width, int height) {
             this.centerX = width * normX;
             this.centerY = height * normY;
             if (kind == ElementKind.DPAD) {
-                this.radius = Math.min(height * defaultRadiusScale, width * 0.14f);
+                this.radius = Math.min(height * defaultRadiusScale, width * 0.14f) * sizeFactor;
             } else {
-                this.radius = height * defaultRadiusScale;
+                this.radius = height * defaultRadiusScale * sizeFactor;
             }
         }
 
         void resetToDefault() {
             this.normX = defaultNormX;
             this.normY = defaultNormY;
+            this.sizeFactor = 1f;
+            this.visible = true;
         }
 
         boolean contains(float px, float py) {
