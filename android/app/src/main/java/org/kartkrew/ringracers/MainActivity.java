@@ -365,12 +365,10 @@ public final class MainActivity extends Activity {
                 File gameDir = StorageHelper.getGameDir(storageRoot);
                 final boolean shared = StorageHelper.hasSharedAccess();
                 final String lastError = readLastError(gameDir);
-                final String loadingCrash = lastError == null ? readMarker(gameDir, "loading.txt") : null;
+                readMarker(gameDir, "loading.txt"); // silent cleanup, no nag screen
                 runOnUiThread(() -> {
                     if (lastError != null) {
                         showLastError(gameDir, lastError);
-                    } else if (loadingCrash != null) {
-                        showLoadingCrash(gameDir, loadingCrash);
                     } else {
                         showReady(gameDir, shared);
                     }
@@ -392,15 +390,6 @@ public final class MainActivity extends Activity {
     private void showLastError(File gameDir, String lastError) {
         progress.setVisibility(View.GONE);
         status.setText("Último error:\n" + lastError);
-        pathView.setText(tr("data") + gameDir.getAbsolutePath()
-            + "\n" + tr("addons") + new File(gameDir, "addons").getAbsolutePath());
-        playButton.setVisibility(View.VISIBLE);
-    }
-
-    /** Shows which addon was loading when a hard crash killed the game. */
-    private void showLoadingCrash(File gameDir, String fileName) {
-        progress.setVisibility(View.GONE);
-        status.setText("Se cerró cargando:\n" + fileName);
         pathView.setText(tr("data") + gameDir.getAbsolutePath()
             + "\n" + tr("addons") + new File(gameDir, "addons").getAbsolutePath());
         playButton.setVisibility(View.VISIBLE);

@@ -666,6 +666,13 @@ boolean CL_LoadServerFiles(void)
 		else if (fileneeded[i].status == FS_FOUND)
 		{
 #ifdef ANDROID
+			/* Shed stale purgeable cache BEFORE the spike: menu/level
+			 * textures and sprites are reloaded on demand, so this buys
+			 * maximum headroom for big char packs on weak phones.
+			 * (SDL_APP_LOWMEMORY purge may arrive too late or never.) */
+			Z_FreeTags(PU_CACHE, PU_CACHE);
+#endif
+#ifdef ANDROID
 			/* Crash marker: a hard crash (segfault/LMK kill) while loading
 			 * leaves loading.txt behind, so the loader screen can report
 			 * WHICH addon killed the game. Deleted right after a clean load. */
