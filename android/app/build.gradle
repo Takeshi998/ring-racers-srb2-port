@@ -121,9 +121,10 @@ android {
                 def overlayTriplets = (overlayEnv != null && !overlayEnv.isEmpty())
                     ? ["-DVCPKG_OVERLAY_TRIPLETS=" + overlayEnv] : []
                 def is32bitArm = targetTriplet.startsWith("arm-android")
-                def archFlags = is32bitArm
-                    ? ["-march=armv7-a", "-mfpu=neon", "-mfloat-abi=softfp", "-O3"]
-                    : ["-march=armv8-a+crc+crypto", "-O3"]
+                # NOTE: no -march here. The NDK toolchain already sets the right
+                # -march/-mfpu per ABI, and custom -march breaks CMake compiler
+                # detection (host clang receives ARM flags). -O3 stays.
+                def archFlags = ["-O3"]
                 def cmakeArgs = [
                     "-DCMAKE_TOOLCHAIN_FILE=${vcpkgRoot}/scripts/buildsystems/vcpkg.cmake",
                     "-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=${ndkHome}/build/cmake/android.toolchain.cmake",
