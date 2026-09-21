@@ -172,6 +172,13 @@ public final class MainActivity extends Activity {
 
     /** Lets the user pick the storage root (default: /sdcard). Engine appends RingRacers. */
     private void pickFolder() {
+        // Custom folders need raw filesystem writes (native engine), so
+        // All-files access must come first.
+        if (needsSharedPermission()) {
+            status.setText("Primero 'Dar acceso a archivos', luego elige carpeta.");
+            requestSharedAccess();
+            return;
+        }
         try {
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -200,6 +207,9 @@ public final class MainActivity extends Activity {
                 status.setText(e.getMessage());
                 retry.setVisibility(View.VISIBLE);
             }
+        } else if (needsSharedPermission()) {
+            status.setText("Sin escritura: toca 'Dar acceso a archivos' y reintenta.");
+            permissionButton.setVisibility(View.VISIBLE);
         } else {
             status.setText("No se pudo usar esa carpeta (solo almacenamiento principal).");
         }
