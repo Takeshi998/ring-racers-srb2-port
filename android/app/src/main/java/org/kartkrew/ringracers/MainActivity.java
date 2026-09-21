@@ -48,8 +48,93 @@ public final class MainActivity extends Activity {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (StorageHelper.getUiLang(this) == null) {
+            setContentView(createLanguageView());
+        } else {
+            startMain();
+        }
+    }
+
+    private void startMain() {
         setContentView(createLoadingView());
         prepareGame();
+    }
+
+    private View createLanguageView() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER);
+        root.setPadding(dp(48), dp(32), dp(48), dp(32));
+        root.setBackgroundColor(Color.rgb(13, 15, 18));
+
+        TextView title = new TextView(this);
+        title.setText("Ring Racers");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(28);
+        title.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
+        title.setGravity(Gravity.CENTER);
+        root.addView(title, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+
+        String[][] langs = {{"en", "English"}, {"es", "Español"}, {"pt", "Português"}};
+        for (String[] lang : langs) {
+            Button button = new Button(this);
+            button.setText(lang[1]);
+            button.setAllCaps(false);
+            button.setOnClickListener(view -> {
+                StorageHelper.setUiLang(this, lang[0]);
+                startMain();
+            });
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(240), dp(56));
+            params.topMargin = dp(16);
+            root.addView(button, params);
+        }
+        return root;
+    }
+
+    /** Localized UI string for the language chosen once. */
+    private String tr(String key) {
+        String lang = StorageHelper.getUiLang(this);
+        if (lang == null) {
+            lang = "en";
+        }
+        switch (key) {
+            case "preparing": return lang.equals("es") ? "Preparando datos"
+                : lang.equals("pt") ? "Preparando dados do jogo" : "Preparing game data";
+            case "play": return lang.equals("es") ? "Jugar"
+                : lang.equals("pt") ? "Jogar" : "Play";
+            case "folder": return lang.equals("es") ? "Elegir carpeta"
+                : lang.equals("pt") ? "Escolher pasta" : "Choose folder";
+            case "grant": return lang.equals("es") ? "Dar acceso a archivos"
+                : lang.equals("pt") ? "Permitir acesso a arquivos" : "Grant file access";
+            case "retry": return lang.equals("es") ? "Reintentar"
+                : lang.equals("pt") ? "Tentar de novo" : "Retry";
+            case "starting": return lang.equals("es") ? "Iniciando… (toca para opciones)"
+                : lang.equals("pt") ? "Iniciando… (toque para opções)" : "Starting… (tap for options)";
+            case "ready": return lang.equals("es") ? "Listo: "
+                : lang.equals("pt") ? "Pronto: " : "Ready: ";
+            case "ready_private": return lang.equals("es") ? "Listo (privado): "
+                : lang.equals("pt") ? "Pronto (privado): " : "Ready (private): ";
+            case "data": return lang.equals("es") ? "Datos: "
+                : lang.equals("pt") ? "Dados: " : "Data: ";
+            case "addons": return "Addons: ";
+            case "needperm": return lang.equals("es") ? "Primero 'Dar acceso a archivos', luego elige carpeta."
+                : lang.equals("pt") ? "Primeiro 'Permitir acesso', depois escolha a pasta."
+                : "Grant file access first, then pick a folder.";
+            case "nowrite": return lang.equals("es") ? "Sin escritura: toca 'Dar acceso a archivos' y reintenta."
+                : lang.equals("pt") ? "Sem escrita: toque em 'Permitir acesso' e tente de novo."
+                : "No write access: tap 'Grant file access' and retry.";
+            case "nopicker": return lang.equals("es") ? "Sin selector de carpetas: "
+                : lang.equals("pt") ? "Sem seletor de pastas: " : "No folder picker: ";
+            case "noaccess": return lang.equals("es") ? "No se pudo abrir el ajuste: "
+                : lang.equals("pt") ? "Não foi possível abrir a configuração: " : "Couldn't open settings: ";
+            case "folderfail": return lang.equals("es") ? "No se pudo usar esa carpeta (solo almacenamiento principal)."
+                : lang.equals("pt") ? "Não foi possível usar essa pasta (só armazenamento principal)."
+                : "Couldn't use that folder (primary storage only).";
+            default: return key;
+        }
     }
 
     @Override
@@ -77,7 +162,7 @@ public final class MainActivity extends Activity {
         ));
 
         status = new TextView(this);
-        status.setText("Preparing game data");
+        status.setText(tr("preparing"));
         status.setTextColor(Color.rgb(194, 201, 207));
         status.setTextSize(14);
         status.setGravity(Gravity.CENTER);
@@ -97,7 +182,7 @@ public final class MainActivity extends Activity {
         root.addView(progress, progressParams);
 
         retry = new Button(this);
-        retry.setText("Retry");
+        retry.setText(tr("retry"));
         retry.setAllCaps(false);
         retry.setVisibility(View.GONE);
         retry.setOnClickListener(view -> prepareGame());
@@ -106,7 +191,7 @@ public final class MainActivity extends Activity {
         root.addView(retry, retryParams);
 
         permissionButton = new Button(this);
-        permissionButton.setText("Dar acceso a archivos");
+        permissionButton.setText(tr("grant"));
         permissionButton.setAllCaps(false);
         permissionButton.setVisibility(View.GONE);
         permissionButton.setOnClickListener(view -> requestSharedAccess());
@@ -115,7 +200,7 @@ public final class MainActivity extends Activity {
         root.addView(permissionButton, permParams);
 
         folderButton = new Button(this);
-        folderButton.setText("Elegir carpeta");
+        folderButton.setText(tr("folder"));
         folderButton.setAllCaps(false);
         folderButton.setOnClickListener(view -> pickFolder());
         LinearLayout.LayoutParams folderParams = new LinearLayout.LayoutParams(dp(240), dp(48));
@@ -123,7 +208,7 @@ public final class MainActivity extends Activity {
         root.addView(folderButton, folderParams);
 
         playButton = new Button(this);
-        playButton.setText("Jugar");
+        playButton.setText(tr("play"));
         playButton.setAllCaps(false);
         playButton.setVisibility(View.GONE);
         playButton.setOnClickListener(view -> launchGame());
@@ -159,7 +244,7 @@ public final class MainActivity extends Activity {
                 }, REQUEST_STORAGE_LEGACY);
             }
         } catch (Exception e) {
-            status.setText("No se pudo abrir el ajuste: " + e.getMessage());
+            status.setText(tr("noaccess") + e.getMessage());
         }
     }
 
@@ -179,7 +264,7 @@ public final class MainActivity extends Activity {
         // Custom folders need raw filesystem writes (native engine), so
         // All-files access must come first.
         if (needsSharedPermission()) {
-            status.setText("Primero 'Dar acceso a archivos', luego elige carpeta.");
+            status.setText(tr("needperm"));
             requestSharedAccess();
             return;
         }
@@ -190,7 +275,7 @@ public final class MainActivity extends Activity {
                 | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
             startActivityForResult(intent, REQUEST_OPEN_TREE);
         } catch (Exception e) {
-            status.setText("Sin selector de carpetas: " + e.getMessage());
+            status.setText(tr("nopicker") + e.getMessage());
         }
     }
 
@@ -212,10 +297,10 @@ public final class MainActivity extends Activity {
                 retry.setVisibility(View.VISIBLE);
             }
         } else if (needsSharedPermission()) {
-            status.setText("Sin escritura: toca 'Dar acceso a archivos' y reintenta.");
+            status.setText(tr("nowrite"));
             permissionButton.setVisibility(View.VISIBLE);
         } else {
-            status.setText("No se pudo usar esa carpeta (solo almacenamiento principal).");
+            status.setText(tr("folderfail"));
         }
     }
 
@@ -267,7 +352,7 @@ public final class MainActivity extends Activity {
         permissionButton.setVisibility(View.GONE);
         playButton.setVisibility(View.GONE);
         progress.setVisibility(View.VISIBLE);
-        status.setText("Preparing game data");
+        status.setText(tr("preparing"));
 
         extractor.execute(() -> {
             try {
@@ -296,15 +381,14 @@ public final class MainActivity extends Activity {
     /** Ready screen: user picks folder (optional) and taps Jugar. No auto-launch. */
     private void showReady(File gameDir, boolean shared) {
         progress.setVisibility(View.GONE);
-        final String readyMsg = shared ? "Listo: " + gameDir.getAbsolutePath()
-            : "Listo (privado): " + gameDir.getAbsolutePath();
+        final String readyMsg = (shared ? tr("ready") : tr("ready_private")) + gameDir.getAbsolutePath();
         status.setText(readyMsg);
-        pathView.setText("Datos: " + gameDir.getAbsolutePath()
-            + "\nAddons: " + new File(gameDir, "addons").getAbsolutePath());
+        pathView.setText(tr("data") + gameDir.getAbsolutePath()
+            + "\n" + tr("addons") + new File(gameDir, "addons").getAbsolutePath());
         // Ask once: after the first successful launch, auto-start with a
         // chance to cancel (tap anywhere shows the options).
         if (StorageHelper.hasLaunched(this)) {
-            status.setText("Iniciando… (toca para opciones)");
+            status.setText(tr("starting"));
             autoLaunch = this::launchGame;
             uiHandler.postDelayed(autoLaunch, 1500);
             findViewById(android.R.id.content).setOnTouchListener((view, event) -> {

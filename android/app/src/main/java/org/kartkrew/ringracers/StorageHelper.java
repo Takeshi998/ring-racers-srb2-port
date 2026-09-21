@@ -26,6 +26,7 @@ final class StorageHelper {
     static final String DOWNLOADS_DIR_NAME = "downloads";
     private static final String PREFS_NAME = "ringracers_storage";
     private static final String KEY_CUSTOM_ROOT = "custom_root";
+    private static final String KEY_UI_LANG = "ui_lang";
 
     private StorageHelper() {
     }
@@ -49,6 +50,17 @@ final class StorageHelper {
     static void clearCustomRoot(Context context) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().remove(KEY_CUSTOM_ROOT).apply();
+    }
+
+    /** UI language override chosen once on first run ("en", "es", "pt"), or null. */
+    static String getUiLang(Context context) {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_UI_LANG, null);
+    }
+
+    static void setUiLang(Context context, String lang) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString(KEY_UI_LANG, lang).apply();
     }
 
     private static final String KEY_LAUNCHED = "has_launched";
