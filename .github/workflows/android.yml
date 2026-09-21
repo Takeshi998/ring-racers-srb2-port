@@ -64,7 +64,7 @@ jobs:
           git checkout 5f96cd15fd745122cf27e0524606d6c1efc5fd07
 
       - name: Bootstrap vcpkg
-        run: ./vcpkg/bootstrap-vcpkg.sh
+        run: ./bootstrap-vcpkg.sh
         working-directory: vcpkg
 
       - name: Cache vcpkg installed
