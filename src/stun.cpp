@@ -12,7 +12,12 @@
 
 /* https://tools.ietf.org/html/rfc5389 */
 
-#if defined (__linux__) || defined (__FreeBSD__)
+#if defined (__ANDROID__) && __ANDROID_API__ < 28
+/* getrandom() needs API 28+; minSdk goes lower, so use /dev/urandom. */
+#include <cstdio>
+#include <cstdlib>
+#include <ctime>
+#elif defined (__linux__) || defined (__FreeBSD__)
 #include <sys/random.h>
 #elif defined (_WIN32)
 #define _CRT_RAND_S
@@ -94,6 +99,24 @@ csprng
 	for (o = 0; o < size; o += sizeof (unsigned int))
 	{
 		rand_s((unsigned int *)&((char *)buffer)[o]);
+	}
+#elif defined (__ANDROID__) && __ANDROID_API__ < 28
+	{
+		/* STUN transaction IDs are not secret; urandom with rand() fallback. */
+		FILE *urandom = fopen("/dev/urandom", "rb");
+		size_t got = 0;
+		if (urandom)
+		{
+			got = fread(buffer, 1, size, urandom);
+			fclose(urandom);
+		}
+		if (got != size)
+		{
+			size_t o;
+			srand((unsigned int)time(NULL));
+			for (o = got; o < size; o++)
+				((unsigned char *)buffer)[o] = (unsigned char)(rand() & 0xFF);
+		}
 	}
 #elif defined (__linux__)
 	getrandom(buffer, size, 0U);
