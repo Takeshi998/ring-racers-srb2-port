@@ -296,8 +296,9 @@ public final class MainActivity extends Activity {
     /** Ready screen: user picks folder (optional) and taps Jugar. No auto-launch. */
     private void showReady(File gameDir, boolean shared) {
         progress.setVisibility(View.GONE);
-        status.setText(shared ? "Listo: " + gameDir.getAbsolutePath()
-            : "Listo (privado): " + gameDir.getAbsolutePath());
+        final String readyMsg = shared ? "Listo: " + gameDir.getAbsolutePath()
+            : "Listo (privado): " + gameDir.getAbsolutePath();
+        status.setText(readyMsg);
         pathView.setText("Datos: " + gameDir.getAbsolutePath()
             + "\nAddons: " + new File(gameDir, "addons").getAbsolutePath());
         // Ask once: after the first successful launch, auto-start with a
@@ -311,7 +312,7 @@ public final class MainActivity extends Activity {
                     uiHandler.removeCallbacks(autoLaunch);
                     autoLaunch = null;
                     findViewById(android.R.id.content).setOnTouchListener(null);
-                    status.setText(ready);
+                    status.setText(readyMsg);
                     playButton.setVisibility(View.VISIBLE);
                 }
                 return true;

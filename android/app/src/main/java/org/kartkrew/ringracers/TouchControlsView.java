@@ -30,8 +30,10 @@ final class TouchControlsView extends View {
     private static final String KEY_UI_VISIBLE = "ui_visible";
     private static final int NUM_PROFILES = 3;
     /** ids opcionales (visibles/ocultables desde el menú lateral) */
-    private static final String[] OPTIONAL_IDS = {"chat", "rank", "console", "lua1", "lua2", "lua3", "cruise", "shift"};
-    private static final String[] OPTIONAL_NAMES = {"CHAT", "RANK", "CON", "LUA 1", "LUA 2", "LUA 3", "CRUISE", "SHIFT"};
+    private static final String[] OPTIONAL_IDS = {"chat", "rank", "console", "lua1", "lua2", "lua3", "cruise", "shift",
+        "trick_up", "trick_down", "trick_left", "trick_right"};
+    private static final String[] OPTIONAL_NAMES = {"CHAT", "RANK", "CON", "LUA 1", "LUA 2", "LUA 3", "CRUISE", "SHIFT",
+        "TRICK UP", "TRICK DOWN", "TRICK LEFT", "TRICK RIGHT"};
     private static final int OUTLINE_COLOR = Color.argb(185, 255, 255, 255);
     private static final int LABEL_COLOR = Color.WHITE;
 
@@ -151,6 +153,21 @@ final class TouchControlsView extends View {
         shiftButton = new TouchElement("shift", "SHIFT", "a/A", KeyEvent.KEYCODE_SHIFT_LEFT, 0.70f, 0.085f, 0.052f,
             Color.rgb(53, 58, 64), ElementKind.SHIFT);
 
+        // Trick combos: single tap holds GO + a D-pad direction (trick panels).
+        // keysAt() emits both keys (like the D-pad diagonals already do).
+        TouchElement trickUp = new TouchElement("trick_up", "A\u25B2", "TRICK", KeyEvent.KEYCODE_A, 0.30f, 0.55f, 0.055f,
+            Color.rgb(45, 159, 93), ElementKind.ACTION);
+        trickUp.comboExtra = KeyEvent.KEYCODE_DPAD_UP;
+        TouchElement trickDown = new TouchElement("trick_down", "A\u25BC", "TRICK", KeyEvent.KEYCODE_A, 0.38f, 0.55f, 0.055f,
+            Color.rgb(45, 159, 93), ElementKind.ACTION);
+        trickDown.comboExtra = KeyEvent.KEYCODE_DPAD_DOWN;
+        TouchElement trickLeft = new TouchElement("trick_left", "A\u25C0", "TRICK", KeyEvent.KEYCODE_A, 0.30f, 0.68f, 0.055f,
+            Color.rgb(45, 159, 93), ElementKind.ACTION);
+        trickLeft.comboExtra = KeyEvent.KEYCODE_DPAD_LEFT;
+        TouchElement trickRight = new TouchElement("trick_right", "A\u25B6", "TRICK", KeyEvent.KEYCODE_A, 0.38f, 0.68f, 0.055f,
+            Color.rgb(45, 159, 93), ElementKind.ACTION);
+        trickRight.comboExtra = KeyEvent.KEYCODE_DPAD_RIGHT;
+
         actionButtons.add(go);
         actionButtons.add(drift);
         actionButtons.add(item);
@@ -167,6 +184,10 @@ final class TouchControlsView extends View {
         actionButtons.add(lua3);
         actionButtons.add(cruiseButton);
         actionButtons.add(shiftButton);
+        actionButtons.add(trickUp);
+        actionButtons.add(trickDown);
+        actionButtons.add(trickLeft);
+        actionButtons.add(trickRight);
         allElements.addAll(actionButtons);
 
         editButton = new TouchElement("edit", "EDIT", "", 0, 0.42f, 0.085f, 0.052f,
@@ -993,6 +1014,12 @@ final class TouchControlsView extends View {
         for (TouchElement button : actionButtons) {
             if (button.visible && button != chatButton && button.kind != ElementKind.CRUISE
                     && button.kind != ElementKind.SHIFT && button.contains(pointerX, pointerY)) {
+                if (button.comboExtra != 0) {
+                    Set<Integer> combo = new HashSet<>();
+                    combo.add(button.keyCode);
+                    combo.add(button.comboExtra);
+                    return combo;
+                }
                 return Collections.singleton(button.keyCode);
             }
         }
@@ -1084,6 +1111,7 @@ final class TouchControlsView extends View {
         float radius;
         float sizeFactor;
         boolean visible;
+        int comboExtra;
 
         TouchElement(String id, String label, String code, int keyCode, float defaultNormX,
                      float defaultNormY, float defaultRadiusScale, int color, ElementKind kind) {
