@@ -807,6 +807,40 @@ static UINT16 W_InitFileError (const char *filename, boolean exitworthy)
 //
 // Can now load dehacked files (.soc)
 //
+#ifdef ANDROID
+// RAM profiler for weak phones: appends "<basename> <stage> <rssMB>" to
+// srb2home/memprofile.txt. If the OS kills the game mid-load, the file shows
+// exactly which stage spiked. Readable from any file manager.
+static void W_MemProfile(const char *filename, const char *stage)
+{
+	FILE *statm, *log;
+	long dummy, rss_pages = 0;
+	char path[768];
+	const char *base = filename, *p;
+
+	if (srb2home[0] == '\0' || strcmp(srb2home, ".") == 0)
+		return;
+	statm = fopen("/proc/self/statm", "r");
+	if (statm)
+	{
+		if (fscanf(statm, "%ld %ld", &dummy, &rss_pages) < 2)
+			rss_pages = 0;
+		fclose(statm);
+	}
+	for (p = base; *p; p++)
+		if (*p == '/' || *p == '\\' || *p == ':')
+			base = p + 1;
+	snprintf(path, sizeof path, "%s/memprofile.txt", srb2home);
+	path[sizeof path - 1] = '\0';
+	log = fopen(path, "a");
+	if (log)
+	{
+		fprintf(log, "%s %s %ld\n", base, stage, rss_pages * 4 / 1024);
+		fclose(log);
+	}
+}
+#endif
+
 UINT16 W_InitFile(const char *filename, boolean mainfile, boolean startup, const char *md5expected)
 {
 	FILE *handle;
@@ -965,6 +999,9 @@ UINT16 W_InitFile(const char *filename, boolean mainfile, boolean startup, const
 	//
 	// link wad file to search files
 	//
+#ifdef ANDROID
+	W_MemProfile(filename, "dir");
+#endif
 	wadfile = static_cast<wadfile_t*>(Z_Malloc(sizeof (*wadfile), PU_STATIC, NULL));
 	wadfile->filename = Z_StrDup(filename);
 	wadfile->type = type;
@@ -1042,6 +1079,9 @@ UINT16 W_InitFile(const char *filename, boolean mainfile, boolean startup, const
 	default:
 		break;
 	}
+#ifdef ANDROID
+	W_MemProfile(filename, "scripts");
+#endif
 
 	K_InitTerrain(numwadfiles - 1);
 
@@ -1050,6 +1090,9 @@ UINT16 W_InitFile(const char *filename, boolean mainfile, boolean startup, const
 	DEH_UpdateMaxFreeslots();
 
 	W_InvalidateLumpnumCache();
+#ifdef ANDROID
+	W_MemProfile(filename, "done");
+#endif
 	return wadfile->numlumps;
 }
 
