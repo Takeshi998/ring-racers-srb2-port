@@ -29,8 +29,8 @@ final class TouchControlsView extends View {
     private static final String KEY_ACTIVE_PROFILE = "active_profile";
     private static final int NUM_PROFILES = 3;
     /** ids opcionales (visibles/ocultables desde el menú lateral) */
-    private static final String[] OPTIONAL_IDS = {"chat", "rank", "console", "lua1", "lua2", "lua3", "cruise"};
-    private static final String[] OPTIONAL_NAMES = {"CHAT", "RANK", "CON", "LUA 1", "LUA 2", "LUA 3", "CRUISE"};
+    private static final String[] OPTIONAL_IDS = {"chat", "rank", "console", "lua1", "lua2", "lua3", "cruise", "shift"};
+    private static final String[] OPTIONAL_NAMES = {"CHAT", "RANK", "CON", "LUA 1", "LUA 2", "LUA 3", "CRUISE", "SHIFT"};
     private static final int OUTLINE_COLOR = Color.argb(185, 255, 255, 255);
     private static final int LABEL_COLOR = Color.WHITE;
 
@@ -54,6 +54,8 @@ final class TouchControlsView extends View {
     private final Map<Integer, Float> dragOffsetY = new HashMap<>();
     private final Set<Integer> cruisePointers = new HashSet<>();
     private boolean cruiseActive = false;
+    private final Set<Integer> shiftPointers = new HashSet<>();
+    private boolean shiftActive = false;
 
     private TouchElement dpadElement;
     private TouchElement pauseButton;
@@ -61,6 +63,7 @@ final class TouchControlsView extends View {
     private TouchElement editButton;
     private TouchElement chatButton;
     private TouchElement cruiseButton;
+    private TouchElement shiftButton;
     private TouchElement resetButton;
     private TouchElement doneButton;
     private TouchElement sizeMinusButton;
@@ -141,6 +144,11 @@ final class TouchControlsView extends View {
         // accelerates without keeping a finger down. Tap again to release.
         cruiseButton = new TouchElement("cruise", "CRUISE", "AUTO", KeyEvent.KEYCODE_A, 0.965f, 0.90f, 0.062f,
             Color.rgb(45, 159, 93), ElementKind.CRUISE);
+        // SHIFT latch for typing capitals with the system keyboard: soft keyboards
+        // rarely update SDL shift-mods, so one tap holds LSHIFT (engine shiftdown=1
+        // via SDL_GetModState, see CON_ShiftChar) until tapped again.
+        shiftButton = new TouchElement("shift", "SHIFT", "a/A", KeyEvent.KEYCODE_SHIFT_LEFT, 0.70f, 0.085f, 0.052f,
+            Color.rgb(53, 58, 64), ElementKind.SHIFT);
 
         actionButtons.add(go);
         actionButtons.add(drift);
@@ -157,6 +165,7 @@ final class TouchControlsView extends View {
         actionButtons.add(lua2);
         actionButtons.add(lua3);
         actionButtons.add(cruiseButton);
+        actionButtons.add(shiftButton);
         allElements.addAll(actionButtons);
 
         editButton = new TouchElement("edit", "EDIT", "", 0, 0.42f, 0.085f, 0.052f,
@@ -489,6 +498,8 @@ final class TouchControlsView extends View {
                 pressed = !editPointers.isEmpty();
             } else if (button.kind == ElementKind.CRUISE) {
                 pressed = cruiseActive;
+            } else if (button.kind == ElementKind.SHIFT) {
+                pressed = shiftActive;
             } else {
                 pressed = isPressed(button.keyCode);
             }
@@ -749,8 +760,12 @@ final class TouchControlsView extends View {
         chatPointers.clear();
         editPointers.clear();
         cruisePointers.clear();
+        shiftPointers.clear();
         if (cruiseActive) {
             cruiseActive = false;
+        }
+        if (shiftActive) {
+            shiftActive = false;
         }
         List<Integer> pressedKeys = new ArrayList<>(keyReferences.keySet());
         pointerKeys.clear();
@@ -807,6 +822,17 @@ final class TouchControlsView extends View {
             cruisePointers.remove(pointerId);
         }
 
+        // SHIFT latch check for capitals.
+        boolean inShift = shiftButton != null && shiftButton.visible && shiftButton.contains(pointerX, pointerY);
+        if (inShift) {
+            if (!shiftPointers.contains(pointerId)) {
+                shiftPointers.add(pointerId);
+                setShift(!shiftActive);
+            }
+        } else {
+            shiftPointers.remove(pointerId);
+        }
+
         Set<Integer> nextKeys = keysAt(pointerX, pointerY);
         Set<Integer> previousKeys = pointerKeys.getOrDefault(pointerId, Collections.emptySet());
 
@@ -834,6 +860,7 @@ final class TouchControlsView extends View {
         editPointers.remove(pointerId);
         chatPointers.remove(pointerId);
         cruisePointers.remove(pointerId);
+        shiftPointers.remove(pointerId);
         Set<Integer> previousKeys = pointerKeys.remove(pointerId);
         if (previousKeys != null) {
             for (int keyCode : previousKeys) {
@@ -852,6 +879,19 @@ final class TouchControlsView extends View {
             pressKey(KeyEvent.KEYCODE_A);
         } else {
             releaseKey(KeyEvent.KEYCODE_A);
+        }
+        invalidate();
+    }
+
+    private void setShift(boolean active) {
+        if (shiftActive == active) {
+            return;
+        }
+        shiftActive = active;
+        if (active) {
+            pressKey(KeyEvent.KEYCODE_SHIFT_LEFT);
+        } else {
+            releaseKey(KeyEvent.KEYCODE_SHIFT_LEFT);
         }
         invalidate();
     }
@@ -895,9 +935,13 @@ final class TouchControlsView extends View {
         if (cruiseButton != null && cruiseButton.contains(pointerX, pointerY)) {
             return Collections.emptySet();
         }
+        if (shiftButton != null && shiftButton.contains(pointerX, pointerY)) {
+            return Collections.emptySet();
+        }
 
         for (TouchElement button : actionButtons) {
-            if (button.visible && button != chatButton && button.kind != ElementKind.CRUISE && button.contains(pointerX, pointerY)) {
+            if (button.visible && button != chatButton && button.kind != ElementKind.CRUISE
+                    && button.kind != ElementKind.SHIFT && button.contains(pointerX, pointerY)) {
                 return Collections.singleton(button.keyCode);
             }
         }
@@ -960,6 +1004,7 @@ final class TouchControlsView extends View {
         ACTION,
         CHAT,
         CRUISE,
+        SHIFT,
         KEYBOARD,
         PAUSE,
         EDIT,
