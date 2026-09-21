@@ -27,6 +27,7 @@ final class TouchControlsView extends View {
     private static final String PREFS_NAME = "ringracers_touch_controls";
     private static final String PREFS_META = "ringracers_touch_controls_meta";
     private static final String KEY_ACTIVE_PROFILE = "active_profile";
+    private static final String KEY_UI_VISIBLE = "ui_visible";
     private static final int NUM_PROFILES = 3;
     /** ids opcionales (visibles/ocultables desde el menú lateral) */
     private static final String[] OPTIONAL_IDS = {"chat", "rank", "console", "lua1", "lua2", "lua3", "cruise", "shift"};
@@ -315,6 +316,20 @@ final class TouchControlsView extends View {
         invalidate();
     }
 
+    private boolean isUiVisible() {
+        return getContext().getSharedPreferences(PREFS_META, Context.MODE_PRIVATE)
+            .getBoolean(KEY_UI_VISIBLE, true);
+    }
+
+    private void setUiVisible(boolean visible) {
+        getContext().getSharedPreferences(PREFS_META, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_UI_VISIBLE, visible).apply();
+        if (!visible) {
+            releaseAll();
+        }
+        invalidate();
+    }
+
     /** Menú lateral: perfiles + botones extra visibles. */
     private void openSideMenu() {
         Context context = getContext();
@@ -322,6 +337,11 @@ final class TouchControlsView extends View {
         layout.setOrientation(android.widget.LinearLayout.VERTICAL);
         int pad = Math.round(20 * getResources().getDisplayMetrics().density);
         layout.setPadding(pad, pad, pad, pad);
+
+        final android.widget.CheckBox showAll = new android.widget.CheckBox(context);
+        showAll.setText("Mostrar controles táctiles");
+        showAll.setChecked(isUiVisible());
+        layout.addView(showAll);
 
         android.widget.TextView profileTitle = new android.widget.TextView(context);
         profileTitle.setText("Perfil de controles");
@@ -359,6 +379,7 @@ final class TouchControlsView extends View {
             .setTitle("Controles")
             .setView(layout)
             .setPositiveButton("Aplicar", (dialog, which) -> {
+                setUiVisible(showAll.isChecked());
                 int checkedProfile = profiles.getCheckedRadioButtonId() - 1000;
                 for (int i = 0; i < OPTIONAL_IDS.length; i++) {
                     TouchElement element = findElementById(OPTIONAL_IDS[i]);
@@ -394,6 +415,20 @@ final class TouchControlsView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+
+        if (!isUiVisible()) {
+            // Gamepad mode: everything hidden except a restore dot.
+            float dotR = Math.max(12 * getResources().getDisplayMetrics().density, 24f);
+            float dotX = getWidth() - dotR * 2f;
+            float dotY = dotR * 2f;
+            if (getWidth() > 0) {
+                fillPaint.setStyle(Paint.Style.FILL);
+                fillPaint.setColor(Color.argb(90, 255, 255, 255));
+                canvas.drawCircle(dotX, dotY, dotR, fillPaint);
+                canvas.drawCircle(dotX, dotY, dotR, outlinePaint);
+            }
+            return;
+        }
 
         if (dpadElement.visible) {
             drawDpad(canvas);
@@ -614,12 +649,28 @@ final class TouchControlsView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (!isUiVisible()) {
+            // Only the restore dot is active; everything else passes through.
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+                float dotR = Math.max(12 * getResources().getDisplayMetrics().density, 24f);
+                float dx = event.getX(event.getActionIndex()) - (getWidth() - dotR * 2f);
+                float dy = event.getY(event.getActionIndex()) - dotR * 2f;
+                if (dx * dx + dy * dy <= dotR * dotR * 2.25f) {
+                    setUiVisible(true);
+                    return true;
+                }
+            }
+            if (action == MotionEvent.ACTION_UP && event.getActionIndex() == 0) {
+                performClick();
+            }
+            return false;
+        }
+        if (editMode) {
+            return handleEditTouchEvent(event, event.getActionMasked(), event.getActionIndex());
+        }
         int action = event.getActionMasked();
         int actionIndex = event.getActionIndex();
-
-        if (editMode) {
-            return handleEditTouchEvent(event, action, actionIndex);
-        }
 
         switch (action) {
             case MotionEvent.ACTION_DOWN:

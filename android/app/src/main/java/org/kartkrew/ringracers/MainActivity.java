@@ -10,6 +10,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
@@ -30,6 +32,8 @@ public final class MainActivity extends Activity {
     private static final int REQUEST_MANAGE_STORAGE = 1002;
     private static final int REQUEST_OPEN_TREE = 1003;
     private final ExecutorService extractor = Executors.newSingleThreadExecutor();
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private Runnable autoLaunch;
     private ProgressBar progress;
     private TextView status;
     private TextView pathView;
@@ -296,11 +300,30 @@ public final class MainActivity extends Activity {
             : "Listo (privado): " + gameDir.getAbsolutePath());
         pathView.setText("Datos: " + gameDir.getAbsolutePath()
             + "\nAddons: " + new File(gameDir, "addons").getAbsolutePath());
+        // Ask once: after the first successful launch, auto-start with a
+        // chance to cancel (tap anywhere shows the options).
+        if (StorageHelper.hasLaunched(this)) {
+            status.setText("Iniciando… (toca para opciones)");
+            autoLaunch = this::launchGame;
+            uiHandler.postDelayed(autoLaunch, 1500);
+            findViewById(android.R.id.content).setOnTouchListener((view, event) -> {
+                if (event.getAction() == android.view.MotionEvent.ACTION_DOWN && autoLaunch != null) {
+                    uiHandler.removeCallbacks(autoLaunch);
+                    autoLaunch = null;
+                    findViewById(android.R.id.content).setOnTouchListener(null);
+                    status.setText(ready);
+                    playButton.setVisibility(View.VISIBLE);
+                }
+                return true;
+            });
+            return;
+        }
         playButton.setVisibility(View.VISIBLE);
     }
 
     private void launchGame() {
         if (!isFinishing() && !isDestroyed()) {
+            StorageHelper.setLaunched(this);
             startActivity(new Intent(this, GameActivity.class));
             finish();
         }

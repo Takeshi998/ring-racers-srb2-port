@@ -51,6 +51,18 @@ final class StorageHelper {
             .edit().remove(KEY_CUSTOM_ROOT).apply();
     }
 
+    private static final String KEY_LAUNCHED = "has_launched";
+
+    static boolean hasLaunched(Context context) {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_LAUNCHED, false);
+    }
+
+    static void setLaunched(Context context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_LAUNCHED, true).apply();
+    }
+
     static boolean hasSharedAccess() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             return Environment.isExternalStorageManager();
