@@ -62,6 +62,7 @@
 #endif
 
 #include "../doomdef.h"
+#include "../z_zone.h"
 
 #ifdef _WIN32
 #include "SDL_syswm.h"
@@ -1033,6 +1034,15 @@ void I_GetEvent(void)
 			case SDL_QUIT:
 				LUA_HookBool(true, HOOK(GameQuit));
 				I_Quit();
+				break;
+
+			case SDL_APP_LOWMEMORY:
+				// Android calls onLowMemory() -> nativeLowMemory() under RAM
+				// pressure, shortly before LMK would kill us. Shed purgeable
+				// lump cache (textures/sprites reloaded on demand) to survive
+				// big mod loads on weak phones. Safe mid-load: PU_CACHE lumps
+				// are re-read from disk when needed.
+				Z_FreeTags(PU_CACHE, PU_CACHE);
 				break;
 		}
 	}
