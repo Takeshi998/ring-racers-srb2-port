@@ -684,7 +684,20 @@ boolean CL_LoadServerFiles(void)
 						FILE *loadfile = fopen(loadpath, "w");
 						if (loadfile)
 						{
+							/* RSS snapshot: proves OOM/LMK kills on weak phones
+							 * (marker shows file + RAM used at load time). */
+							FILE *statm = fopen("/proc/self/statm", "r");
+							long rss_pages = 0;
+							if (statm)
+							{
+								long dummy;
+								if (fscanf(statm, "%ld %ld", &dummy, &rss_pages) < 2)
+									rss_pages = 0;
+								fclose(statm);
+							}
 							fputs(base, loadfile);
+							if (rss_pages > 0)
+								fprintf(loadfile, " (~%ld MB)", rss_pages * 4 / 1024);
 							fclose(loadfile);
 						}
 					}
