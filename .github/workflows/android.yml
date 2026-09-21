@@ -26,7 +26,7 @@ jobs:
           - name: arm64
             abi: arm64-v8a
             triplet: arm64-android
-            overlay: ""
+            overlay: android/triplets
             version_code: "2406"
             version_name: "2.4-android-10"
           - name: arm32
