@@ -5,6 +5,9 @@ plugins {
 def installRoot = System.getenv("RINGRACERS_ASSETS") != null
     ? new File(System.getenv("RINGRACERS_ASSETS"))
     : rootProject.projectDir.parentFile.parentFile // repo inside a Ring Racers install
+// NO_ASSETS=1: skip bundling the 16 game .pk3s (tiny APK). Users copy them
+// into shared RingRacers/game/ over USB; first launch imports them.
+def noAssetsBuild = System.getenv("NO_ASSETS") == "1"
 def generatedAssets = layout.buildDirectory.dir("generated/ringRacersAssets").get().asFile
 def generatedResources = layout.buildDirectory.dir("generated/ringRacersResources").get().asFile
 def generatedSdlJava = layout.buildDirectory.dir("generated/sdlJava").get().asFile
@@ -46,18 +49,22 @@ tasks.register("stageGameAssets", Sync) {
     inputs.files(requiredAssets)
     into(new File(generatedAssets, "game"))
 
-    from(new File(installRoot, "bios.pk3"))
-    from(new File(installRoot, "gamecontrollerdb.txt"))
-    from(new File(installRoot, "data")) {
-        include(gameDataFiles)
-        into("data")
-        rename { name -> name.toLowerCase(Locale.ROOT) }
+    if (!noAssetsBuild) {
+        from(new File(installRoot, "bios.pk3"))
+        from(new File(installRoot, "gamecontrollerdb.txt"))
+        from(new File(installRoot, "data")) {
+            include(gameDataFiles)
+            into("data")
+            rename { name -> name.toLowerCase(Locale.ROOT) }
+        }
     }
 
     doFirst {
-        def missing = requiredAssets.findAll { !it.isFile() }
-        if (!missing.isEmpty()) {
-            throw new org.gradle.api.GradleException("Missing Ring Racers assets: ${missing.join(', ')}")
+        if (!noAssetsBuild) {
+            def missing = requiredAssets.findAll { !it.isFile() }
+            if (!missing.isEmpty()) {
+                throw new org.gradle.api.GradleException("Missing Ring Racers assets: ${missing.join(', ')}")
+            }
         }
     }
 }
@@ -102,7 +109,7 @@ android {
         def verName = System.getenv("APP_VERSION_NAME") ?: "2.4-android-10"
         def abiList = (System.getenv("ANDROID_ABI_FILTERS") ?: "arm64-v8a").split(",").toList()
         versionCode verCode
-        versionName verName
+        versionName noAssetsBuild ? verName + "-noassets" : verName
 
         ndk {
             abiFilters(*abiList)

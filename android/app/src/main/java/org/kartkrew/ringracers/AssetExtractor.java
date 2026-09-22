@@ -56,11 +56,24 @@ final class AssetExtractor {
         }
 
         AssetManager assets = context.getAssets();
+        // No-assets builds: users copy the 16 files over USB into shared
+        // RingRacers/game/<rel>; first launch imports them into private storage.
+        File sharedGame = new File(StorageHelper.getGameDir(
+            StorageHelper.resolveStorageRoot(context)), "game");
         int completed = 0;
         try {
             for (String relativePath : GAME_ASSETS) {
                 listener.onProgress(completed, GAME_ASSETS.size(), relativePath);
-                copyAsset(assets, "game/" + relativePath, new File(gameDirectory, relativePath));
+                File destination = new File(gameDirectory, relativePath);
+                if (assetExists(assets, "game/" + relativePath)) {
+                    copyAsset(assets, "game/" + relativePath, destination);
+                } else {
+                    File staged = new File(sharedGame, relativePath);
+                    if (!staged.isFile()) {
+                        throw new IOException("NEEDFILE:" + relativePath);
+                    }
+                    copyStaged(staged, destination);
+                }
                 completed++;
             }
             writeText(marker, ASSET_VERSION);
@@ -108,6 +121,37 @@ final class AssetExtractor {
             }
         }
         return true;
+    }
+
+    private static boolean assetExists(AssetManager assets, String assetPath) {
+        try {
+            assets.open(assetPath, AssetManager.ACCESS_STREAMING).close();
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static void copyStaged(File source, File destination) throws IOException {
+        File parent = destination.getParentFile();
+        if (parent != null && !parent.mkdirs() && !parent.isDirectory()) {
+            throw new IOException("Could not create " + parent);
+        }
+
+        File temporary = new File(destination.getPath() + ".tmp");
+        byte[] buffer = new byte[1024 * 1024];
+        try (BufferedInputStream input = new BufferedInputStream(new FileInputStream(source));
+             BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream(temporary), buffer.length)) {
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                output.write(buffer, 0, read);
+            }
+        }
+
+        if (!temporary.renameTo(destination)) {
+            temporary.delete();
+            throw new IOException("Could not finish extracting " + destination.getName());
+        }
     }
 
     private static void copyAsset(AssetManager assets, String assetPath, File destination) throws IOException {

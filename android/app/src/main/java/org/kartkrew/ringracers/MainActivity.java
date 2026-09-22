@@ -133,6 +133,11 @@ public final class MainActivity extends Activity {
             case "folderfail": return lang.equals("es") ? "No se pudo usar esa carpeta (solo almacenamiento principal)."
                 : lang.equals("pt") ? "Não foi possível usar essa pasta (só armazenamento principal)."
                 : "Couldn't use that folder (primary storage only).";
+            case "needfile": return lang.equals("es") ? "Falta "
+                : lang.equals("pt") ? "Falta " : "Missing ";
+            case "needfile2": return lang.equals("es") ? ": cópialo en RingRacers/game/ por USB y reintenta"
+                : lang.equals("pt") ? ": copie para RingRacers/game/ via USB e tente de novo"
+                : ": copy it into RingRacers/game/ over USB and retry";
             default: return key;
         }
     }
@@ -375,7 +380,11 @@ public final class MainActivity extends Activity {
                 });
             } catch (IOException exception) {
                 runOnUiThread(() -> {
-                    status.setText(exception.getMessage());
+                    String message = exception.getMessage();
+                    if (message != null && message.startsWith("NEEDFILE:")) {
+                        message = tr("needfile") + message.substring(9) + tr("needfile2");
+                    }
+                    status.setText(message);
                     progress.setVisibility(View.GONE);
                     retry.setVisibility(View.VISIBLE);
                     if (needsSharedPermission()) {

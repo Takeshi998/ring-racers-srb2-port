@@ -60,8 +60,12 @@ final class TouchControlsView extends View {
     private final Map<Integer, Float> dragOffsetY = new HashMap<>();
     private final Set<Integer> cruisePointers = new HashSet<>();
     private boolean cruiseActive = false;
+    private int cruiseLatchedKey = 0;
     private final Set<Integer> shiftPointers = new HashSet<>();
     private boolean shiftActive = false;
+    private final Set<Integer> autoDriftPointers = new HashSet<>();
+    private boolean autoDriftActive = false;
+    private int autoDriftLatchedKey = 0;
     /** pointerId -> trick hold (button + whether cruise was latched at press). */
     private final Map<Integer, TrickHold> trickHolds = new HashMap<>();
 
@@ -72,6 +76,8 @@ final class TouchControlsView extends View {
     private TouchElement chatButton;
     private TouchElement cruiseButton;
     private TouchElement shiftButton;
+    private TouchElement autoDriftButton;
+    private TouchElement driftButtonRef;
     private TouchElement resetButton;
     private TouchElement doneButton;
     private TouchElement sizeMinusButton;
@@ -116,6 +122,7 @@ final class TouchControlsView extends View {
             Color.rgb(45, 159, 93), ElementKind.ACTION);
         TouchElement drift = new TouchElement("drift", "DRIFT", "R", KeyEvent.KEYCODE_S, 0.72f, 0.80f, 0.082f,
             Color.rgb(28, 145, 170), ElementKind.ACTION);
+        driftButtonRef = drift;
         TouchElement item = new TouchElement("item", "ITEM", "L", KeyEvent.KEYCODE_SPACE, 0.79f, 0.53f, 0.078f,
             Color.rgb(224, 169, 47), ElementKind.ACTION);
         TouchElement brake = new TouchElement("brake", "BRAKE", "X", KeyEvent.KEYCODE_D, 0.945f, 0.57f, 0.076f,
@@ -157,6 +164,9 @@ final class TouchControlsView extends View {
         // via SDL_GetModState, see CON_ShiftChar) until tapped again.
         shiftButton = new TouchElement("shift", "SHIFT", "a/A", KeyEvent.KEYCODE_SHIFT_LEFT, 0.70f, 0.085f, 0.052f,
             Color.rgb(53, 58, 64), ElementKind.SHIFT);
+        // AUTO-DRIFT latch: like CRUISE but follows the DRIFT button's key.
+        autoDriftButton = new TouchElement("autodrift", "DRIFT", "HOLD", KeyEvent.KEYCODE_S, 0.55f, 0.93f, 0.060f,
+            Color.rgb(28, 145, 170), ElementKind.AUTODRIFT);
 
         // Trick combos: single tap holds GO + a D-pad direction (trick panels).
         // keysAt() emits both keys (like the D-pad diagonals already do).
@@ -189,6 +199,7 @@ final class TouchControlsView extends View {
         actionButtons.add(lua3);
         actionButtons.add(cruiseButton);
         actionButtons.add(shiftButton);
+        actionButtons.add(autoDriftButton);
         actionButtons.add(trickUp);
         actionButtons.add(trickDown);
         actionButtons.add(trickLeft);
@@ -389,15 +400,15 @@ final class TouchControlsView extends View {
         // Pojav-style: every button listed with its key (remappable) + visibility.
         final String[] rowIds = {"go", "drift", "item", "brake", "spin", "look",
             "bail", "vote", "rank", "console", "lua1", "lua2", "lua3",
-            "cruise", "shift", "trick_up", "trick_down", "trick_left",
+            "cruise", "shift", "autodrift", "trick_up", "trick_down", "trick_left",
             "trick_right", "chat", "pause"};
         final String[] rowNames = {"GO", "DRIFT", "ITEM", "BRAKE", "SPIN", "LOOK",
             "BAIL", "VOTE", "RANK", "CON", "LUA 1", "LUA 2", "LUA 3",
-            "CRUISE", "SHIFT", "TRICK UP", "TRICK DOWN", "TRICK LEFT",
+            "CRUISE", "SHIFT", "AUTO-DRIFT", "TRICK UP", "TRICK DOWN", "TRICK LEFT",
             "TRICK RIGHT", "CHAT", "PAUSA"};
         final boolean[] rowRemappable = {true, true, true, true, true, true,
             true, true, true, true, true, true, true,
-            true, true, true, true, true,
+            true, true, false, true, true, true,
             true, true, false};
         final android.widget.CheckBox[] boxes = new android.widget.CheckBox[rowIds.length];
         final android.widget.Button[] keyButtons = new android.widget.Button[rowIds.length];
@@ -772,6 +783,8 @@ final class TouchControlsView extends View {
                 pressed = cruiseActive;
             } else if (button.kind == ElementKind.SHIFT) {
                 pressed = shiftActive;
+            } else if (button.kind == ElementKind.AUTODRIFT) {
+                pressed = autoDriftActive;
             } else if (button.comboExtra != 0) {
                 pressed = isPressed(button.keyCode) && isPressed(button.comboExtra);
             } else {
@@ -1051,12 +1064,18 @@ final class TouchControlsView extends View {
         editPointers.clear();
         cruisePointers.clear();
         shiftPointers.clear();
+        autoDriftPointers.clear();
         trickHolds.clear();
         if (cruiseActive) {
             cruiseActive = false;
+            cruiseLatchedKey = 0;
         }
         if (shiftActive) {
             shiftActive = false;
+        }
+        if (autoDriftActive) {
+            autoDriftActive = false;
+            autoDriftLatchedKey = 0;
         }
         List<Integer> pressedKeys = new ArrayList<>(keyReferences.keySet());
         pointerKeys.clear();
@@ -1122,6 +1141,18 @@ final class TouchControlsView extends View {
             }
         } else {
             shiftPointers.remove(pointerId);
+        }
+
+        // AUTO-DRIFT latch check.
+        boolean inAutoDrift = autoDriftButton != null && autoDriftButton.visible
+            && autoDriftButton.contains(pointerX, pointerY);
+        if (inAutoDrift) {
+            if (!autoDriftPointers.contains(pointerId)) {
+                autoDriftPointers.add(pointerId);
+                setAutoDrift(!autoDriftActive);
+            }
+        } else {
+            autoDriftPointers.remove(pointerId);
         }
 
         // Trick macro (explicit, bypasses generic diff): guarantees a FRESH A
@@ -1204,6 +1235,7 @@ final class TouchControlsView extends View {
         chatPointers.remove(pointerId);
         cruisePointers.remove(pointerId);
         shiftPointers.remove(pointerId);
+        autoDriftPointers.remove(pointerId);
         endTrickHold(pointerId);
         Set<Integer> previousKeys = pointerKeys.remove(pointerId);
         if (previousKeys != null) {
@@ -1220,9 +1252,11 @@ final class TouchControlsView extends View {
         }
         cruiseActive = active;
         if (active) {
-            pressKey(cruiseButton.keyCode);
-        } else {
-            releaseKey(cruiseButton.keyCode);
+            cruiseLatchedKey = cruiseButton.keyCode;
+            pressKey(cruiseLatchedKey);
+        } else if (cruiseLatchedKey != 0) {
+            releaseKey(cruiseLatchedKey);
+            cruiseLatchedKey = 0;
         }
         invalidate();
     }
@@ -1236,6 +1270,21 @@ final class TouchControlsView extends View {
             pressKey(shiftButton.keyCode);
         } else {
             releaseKey(shiftButton.keyCode);
+        }
+        invalidate();
+    }
+
+    private void setAutoDrift(boolean active) {
+        if (autoDriftActive == active) {
+            return;
+        }
+        autoDriftActive = active;
+        if (active) {
+            autoDriftLatchedKey = driftButtonRef != null ? driftButtonRef.keyCode : KeyEvent.KEYCODE_S;
+            pressKey(autoDriftLatchedKey);
+        } else if (autoDriftLatchedKey != 0) {
+            releaseKey(autoDriftLatchedKey);
+            autoDriftLatchedKey = 0;
         }
         invalidate();
     }
@@ -1282,10 +1331,14 @@ final class TouchControlsView extends View {
         if (shiftButton != null && shiftButton.contains(pointerX, pointerY)) {
             return Collections.emptySet();
         }
+        if (autoDriftButton != null && autoDriftButton.contains(pointerX, pointerY)) {
+            return Collections.emptySet();
+        }
 
         for (TouchElement button : actionButtons) {
             if (button.visible && button != chatButton && button.kind != ElementKind.CRUISE
-                    && button.kind != ElementKind.SHIFT && button.comboExtra == 0
+                    && button.kind != ElementKind.SHIFT && button.kind != ElementKind.AUTODRIFT
+                    && button.comboExtra == 0
                     && button.contains(pointerX, pointerY)) {
                 return Collections.singleton(button.keyCode);
             }
@@ -1350,6 +1403,7 @@ final class TouchControlsView extends View {
         CHAT,
         CRUISE,
         SHIFT,
+        AUTODRIFT,
         KEYBOARD,
         PAUSE,
         EDIT,
