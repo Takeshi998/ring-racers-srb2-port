@@ -54,6 +54,8 @@ final class TouchControlsView extends View {
     private boolean cruiseActive = false;
     private final Set<Integer> shiftPointers = new HashSet<>();
     private boolean shiftActive = false;
+    /** pointerId -> trick hold (button + whether cruise was latched at press). */
+    private final Map<Integer, TrickHold> trickHolds = new HashMap<>();
 
     private TouchElement dpadElement;
     private TouchElement pauseButton;
@@ -918,6 +920,7 @@ final class TouchControlsView extends View {
         editPointers.clear();
         cruisePointers.clear();
         shiftPointers.clear();
+        trickHolds.clear();
         if (cruiseActive) {
             cruiseActive = false;
         }
@@ -990,6 +993,26 @@ final class TouchControlsView extends View {
             shiftPointers.remove(pointerId);
         }
 
+        // Trick macro (explicit, bypasses generic diff): guarantees a FRESH A
+        // down-edge on every press even with CRUISE latched (refcount-only
+        // holds produce no edge), while keeping A+direction held throughout.
+        TouchElement trickHit = trickAt(pointerX, pointerY);
+        TrickHold hold = trickHolds.get(pointerId);
+        if (trickHit != null && (hold == null || hold.button != trickHit)) {
+            if (hold != null) {
+                endTrickHold(pointerId);
+            }
+            boolean wasCruise = cruiseActive;
+            if (wasCruise) {
+                setCruise(false);
+            }
+            pressKey(trickHit.keyCode);
+            pressKey(trickHit.comboExtra);
+            trickHolds.put(pointerId, new TrickHold(trickHit, wasCruise));
+        } else if (trickHit == null && hold != null) {
+            endTrickHold(pointerId);
+        }
+
         Set<Integer> nextKeys = keysAt(pointerX, pointerY);
         Set<Integer> previousKeys = pointerKeys.getOrDefault(pointerId, Collections.emptySet());
 
@@ -1012,12 +1035,45 @@ final class TouchControlsView extends View {
         invalidate();
     }
 
+    private TouchElement trickAt(float pointerX, float pointerY) {
+        for (TouchElement button : actionButtons) {
+            if (button.visible && button.comboExtra != 0 && button.contains(pointerX, pointerY)) {
+                return button;
+            }
+        }
+        return null;
+    }
+
+    private void endTrickHold(int pointerId) {
+        TrickHold hold = trickHolds.remove(pointerId);
+        if (hold == null) {
+            return;
+        }
+        releaseKey(hold.button.keyCode);
+        releaseKey(hold.button.comboExtra);
+        if (hold.wasCruise && !cruiseActive) {
+            setCruise(true);
+        }
+        invalidate();
+    }
+
+    private static final class TrickHold {
+        final TouchElement button;
+        final boolean wasCruise;
+
+        TrickHold(TouchElement button, boolean wasCruise) {
+            this.button = button;
+            this.wasCruise = wasCruise;
+        }
+    }
+
     private void clearPointer(int pointerId) {
         keyboardPointers.remove(pointerId);
         editPointers.remove(pointerId);
         chatPointers.remove(pointerId);
         cruisePointers.remove(pointerId);
         shiftPointers.remove(pointerId);
+        endTrickHold(pointerId);
         Set<Integer> previousKeys = pointerKeys.remove(pointerId);
         if (previousKeys != null) {
             for (int keyCode : previousKeys) {
@@ -1098,13 +1154,8 @@ final class TouchControlsView extends View {
 
         for (TouchElement button : actionButtons) {
             if (button.visible && button != chatButton && button.kind != ElementKind.CRUISE
-                    && button.kind != ElementKind.SHIFT && button.contains(pointerX, pointerY)) {
-                if (button.comboExtra != 0) {
-                    Set<Integer> combo = new HashSet<>();
-                    combo.add(button.keyCode);
-                    combo.add(button.comboExtra);
-                    return combo;
-                }
+                    && button.kind != ElementKind.SHIFT && button.comboExtra == 0
+                    && button.contains(pointerX, pointerY)) {
                 return Collections.singleton(button.keyCode);
             }
         }
