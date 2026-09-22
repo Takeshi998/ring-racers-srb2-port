@@ -15,6 +15,14 @@ import android.view.View;
 
 import org.libsdl.app.SDLActivity;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -431,6 +439,31 @@ final class TouchControlsView extends View {
         android.widget.ScrollView scroll = new android.widget.ScrollView(context);
         scroll.addView(layout);
 
+        android.widget.LinearLayout fileRow = new android.widget.LinearLayout(context);
+        fileRow.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        fileRow.setGravity(android.view.Gravity.CENTER);
+        android.widget.Button exportButton = new android.widget.Button(context);
+        exportButton.setText("Exportar");
+        exportButton.setAllCaps(false);
+        exportButton.setOnClickListener(v -> {
+            File out = exportProfile();
+            android.widget.Toast.makeText(context,
+                out != null ? "Guardado: " + out.getAbsolutePath() : "No se pudo exportar",
+                android.widget.Toast.LENGTH_LONG).show();
+        });
+        android.widget.Button importButton = new android.widget.Button(context);
+        importButton.setText("Importar");
+        importButton.setAllCaps(false);
+        importButton.setOnClickListener(v -> {
+            Context ctx = getContext();
+            if (ctx instanceof GameActivity) {
+                ((GameActivity) ctx).pickControlLayout();
+            }
+        });
+        fileRow.addView(exportButton);
+        fileRow.addView(importButton);
+        layout.addView(fileRow);
+
         new android.app.AlertDialog.Builder(context)
             .setTitle("Controles")
             .setView(scroll)
@@ -514,6 +547,104 @@ final class TouchControlsView extends View {
             })
             .setNegativeButton("Cancelar", null)
             .show();
+    }
+
+    /** Exports the active profile to RingRacers/controles-perfil<N>.json (Pojav-style shareable layout). */
+    File exportProfile() {
+        try {
+            JSONObject root = new JSONObject();
+            root.put("profile", activeProfile + 1);
+            root.put("app", "ringracers-android");
+            JSONArray buttons = new JSONArray();
+            for (TouchElement element : allElements) {
+                JSONObject button = new JSONObject();
+                button.put("id", element.id);
+                button.put("x", element.normX);
+                button.put("y", element.normY);
+                button.put("size", element.sizeFactor);
+                button.put("visible", element.visible);
+                button.put("key", element.keyCode);
+                buttons.put(button);
+            }
+            root.put("buttons", buttons);
+            File storageRoot = StorageHelper.resolveStorageRoot(getContext());
+            StorageHelper.ensureTree(storageRoot);
+            File out = new File(StorageHelper.getGameDir(storageRoot),
+                "controles-perfil" + (activeProfile + 1) + ".json");
+            try (FileOutputStream output = new FileOutputStream(out)) {
+                output.write(root.toString(1).getBytes(StandardCharsets.UTF_8));
+            }
+            return out;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Imports a profile JSON picked via SAF. Returns buttons applied, or -1 on error. */
+    int importProfile(android.net.Uri uri) {
+        int applied = 0;
+        try (InputStream input = getContext().getContentResolver().openInputStream(uri)) {
+            if (input == null) {
+                return -1;
+            }
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            byte[] chunk = new byte[8192];
+            int total = 0, read;
+            while ((read = input.read(chunk)) != -1) {
+                total += read;
+                if (total > 65536) {
+                    return -1;
+                }
+                buffer.write(chunk, 0, read);
+            }
+            JSONArray buttons = new JSONObject(
+                new String(buffer.toByteArray(), StandardCharsets.UTF_8))
+                .getJSONArray("buttons");
+            for (int i = 0; i < buttons.length(); i++) {
+                JSONObject button = buttons.getJSONObject(i);
+                TouchElement element = findElementById(button.optString("id", ""));
+                if (element == null) {
+                    continue;
+                }
+                float x = (float) button.optDouble("x", element.normX);
+                float y = (float) button.optDouble("y", element.normY);
+                float size = (float) button.optDouble("size", 1.0);
+                if (x >= 0f && x <= 1f) {
+                    element.normX = x;
+                }
+                if (y >= 0f && y <= 1f) {
+                    element.normY = y;
+                }
+                if (size >= 0.5f && size <= 2.0f) {
+                    element.sizeFactor = size;
+                }
+                if (button.has("visible")) {
+                    element.visible = button.optBoolean("visible", true);
+                }
+                int key = button.optInt("key", 0);
+                if (key != 0 && element.defaultKeyCode != 0) {
+                    boolean known = false;
+                    for (int knownKey : KEY_CODES) {
+                        if (knownKey == key) {
+                            known = true;
+                            break;
+                        }
+                    }
+                    if (known) {
+                        element.keyCode = key;
+                    }
+                }
+                element.updatePixelCoords(getWidth(), getHeight());
+                applied++;
+            }
+            if (applied > 0) {
+                saveLayout();
+                invalidate();
+            }
+            return applied;
+        } catch (Exception e) {
+            return -1;
+        }
     }
 
     @Override

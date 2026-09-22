@@ -1,5 +1,6 @@
 package org.kartkrew.ringracers;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -13,6 +14,7 @@ import org.libsdl.app.SDLActivity;
 import java.io.File;
 
 public final class GameActivity extends SDLActivity {
+    private static final int REQUEST_CONTROL_LAYOUT = 2001;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TouchControlsView touchControls;
 
@@ -117,6 +119,36 @@ public final class GameActivity extends SDLActivity {
 
     public void hideKeyboard() {
         handler.post(() -> SDLActivity.sendMessage(3, 0));
+    }
+
+    /** Opens a JSON control layout (exported from this or another device). */
+    public void pickControlLayout() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/json");
+        try {
+            startActivityForResult(intent, REQUEST_CONTROL_LAYOUT);
+        } catch (Exception e) {
+            Intent any = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            any.addCategory(Intent.CATEGORY_OPENABLE);
+            any.setType("*/*");
+            try {
+                startActivityForResult(any, REQUEST_CONTROL_LAYOUT);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CONTROL_LAYOUT && resultCode == RESULT_OK
+                && data != null && data.getData() != null && touchControls != null) {
+            int applied = touchControls.importProfile(data.getData());
+            android.widget.Toast.makeText(this,
+                applied >= 0 ? "Botones aplicados: " + applied : "Archivo inválido",
+                android.widget.Toast.LENGTH_LONG).show();
+        }
     }
 
     private void enableImmersiveMode() {
