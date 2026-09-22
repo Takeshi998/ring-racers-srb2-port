@@ -399,14 +399,14 @@ final class TouchControlsView extends View {
 
             android.widget.TextView name = new android.widget.TextView(context);
             name.setText(rowNames[i]);
-            name.setWidth(dp(110));
+            name.setWidth(Math.round(dp(110)));
             row.addView(name);
 
             if (rowRemappable[i] && element != null) {
                 android.widget.Button keyButton = new android.widget.Button(context);
                 keyButton.setText(keyLabel(element.keyCode));
                 keyButton.setAllCaps(false);
-                keyButton.setMinWidth(dp(90));
+                keyButton.setMinWidth(Math.round(dp(90)));
                 final int rowIndex = i;
                 keyButton.setOnClickListener(v -> openKeyPicker(context, rowIds[rowIndex], keyButtons[rowIndex]));
                 keyButtons[i] = keyButton;
@@ -414,7 +414,7 @@ final class TouchControlsView extends View {
             } else {
                 android.widget.TextView fixed = new android.widget.TextView(context);
                 fixed.setText(element != null ? keyLabel(element.keyCode) : "-");
-                fixed.setWidth(dp(90));
+                fixed.setWidth(Math.round(dp(90)));
                 fixed.setGravity(android.view.Gravity.CENTER);
                 row.addView(fixed);
             }
