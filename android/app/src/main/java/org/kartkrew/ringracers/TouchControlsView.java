@@ -29,11 +29,6 @@ final class TouchControlsView extends View {
     private static final String KEY_ACTIVE_PROFILE = "active_profile";
     private static final String KEY_UI_VISIBLE = "ui_visible";
     private static final int NUM_PROFILES = 3;
-    /** ids opcionales (visibles/ocultables desde el menú lateral) */
-    private static final String[] OPTIONAL_IDS = {"chat", "rank", "console", "lua1", "lua2", "lua3", "cruise", "shift",
-        "trick_up", "trick_down", "trick_left", "trick_right"};
-    private static final String[] OPTIONAL_NAMES = {"CHAT", "RANK", "CON", "LUA 1", "LUA 2", "LUA 3", "CRUISE", "SHIFT",
-        "TRICK UP", "TRICK DOWN", "TRICK LEFT", "TRICK RIGHT"};
     private static final int OUTLINE_COLOR = Color.argb(185, 255, 255, 255);
     private static final int LABEL_COLOR = Color.WHITE;
 
@@ -226,15 +221,6 @@ final class TouchControlsView extends View {
         return activeProfile == 0 ? PREFS_NAME : PREFS_NAME + "_p" + activeProfile;
     }
 
-    private boolean isOptional(String id) {
-        for (String optional : OPTIONAL_IDS) {
-            if (optional.equals(id)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private TouchElement findElementById(String id) {
         for (TouchElement element : allElements) {
             if (element.id.equals(id)) {
@@ -253,7 +239,10 @@ final class TouchControlsView extends View {
             element.normX = prefs.getFloat(element.id + "_normX", element.defaultNormX);
             element.normY = prefs.getFloat(element.id + "_normY", element.defaultNormY);
             element.sizeFactor = prefs.getFloat(element.id + "_size", 1f);
-            element.visible = !isOptional(element.id) || prefs.getBoolean(element.id + "_visible", true);
+            element.visible = prefs.getBoolean(element.id + "_visible", true);
+            if (element.defaultKeyCode != 0) {
+                element.keyCode = prefs.getInt(element.id + "_key", element.defaultKeyCode);
+            }
             element.updatePixelCoords(width, height);
         }
         resetButton.updatePixelCoords(width, height);
@@ -270,8 +259,9 @@ final class TouchControlsView extends View {
             editor.putFloat(element.id + "_normX", element.normX);
             editor.putFloat(element.id + "_normY", element.normY);
             editor.putFloat(element.id + "_size", element.sizeFactor);
-            if (isOptional(element.id)) {
-                editor.putBoolean(element.id + "_visible", element.visible);
+            editor.putBoolean(element.id + "_visible", element.visible);
+            if (element.defaultKeyCode != 0) {
+                editor.putInt(element.id + "_key", element.keyCode);
             }
         }
         editor.apply();
@@ -381,52 +371,143 @@ final class TouchControlsView extends View {
         layout.addView(profiles);
 
         android.widget.TextView buttonsTitle = new android.widget.TextView(context);
-        buttonsTitle.setText("Botones extra visibles");
+        buttonsTitle.setText("Botones (tecla y visible)");
         buttonsTitle.setTextSize(16);
         buttonsTitle.setPadding(0, pad / 2, 0, 0);
         layout.addView(buttonsTitle);
 
-        final android.widget.CheckBox[] boxes = new android.widget.CheckBox[OPTIONAL_IDS.length];
-        for (int i = 0; i < OPTIONAL_IDS.length; i++) {
-            TouchElement element = findElementById(OPTIONAL_IDS[i]);
+        // Pojav-style: every button listed with its key (remappable) + visibility.
+        final String[] rowIds = {"go", "drift", "item", "brake", "spin", "look",
+            "bail", "vote", "rank", "console", "lua1", "lua2", "lua3",
+            "cruise", "shift", "trick_up", "trick_down", "trick_left",
+            "trick_right", "chat", "pause"};
+        final String[] rowNames = {"GO", "DRIFT", "ITEM", "BRAKE", "SPIN", "LOOK",
+            "BAIL", "VOTE", "RANK", "CON", "LUA 1", "LUA 2", "LUA 3",
+            "CRUISE", "SHIFT", "TRICK UP", "TRICK DOWN", "TRICK LEFT",
+            "TRICK RIGHT", "CHAT", "PAUSA"};
+        final boolean[] rowRemappable = {true, true, true, true, true, true,
+            true, true, true, true, true, true, true,
+            true, true, true, true, true,
+            true, true, false};
+        final android.widget.CheckBox[] boxes = new android.widget.CheckBox[rowIds.length];
+        final android.widget.Button[] keyButtons = new android.widget.Button[rowIds.length];
+        for (int i = 0; i < rowIds.length; i++) {
+            final TouchElement element = findElementById(rowIds[i]);
+            android.widget.LinearLayout row = new android.widget.LinearLayout(context);
+            row.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+            android.widget.TextView name = new android.widget.TextView(context);
+            name.setText(rowNames[i]);
+            name.setWidth(dp(110));
+            row.addView(name);
+
+            if (rowRemappable[i] && element != null) {
+                android.widget.Button keyButton = new android.widget.Button(context);
+                keyButton.setText(keyLabel(element.keyCode));
+                keyButton.setAllCaps(false);
+                keyButton.setMinWidth(dp(90));
+                final int rowIndex = i;
+                keyButton.setOnClickListener(v -> openKeyPicker(context, rowIds[rowIndex], keyButtons[rowIndex]));
+                keyButtons[i] = keyButton;
+                row.addView(keyButton);
+            } else {
+                android.widget.TextView fixed = new android.widget.TextView(context);
+                fixed.setText(element != null ? keyLabel(element.keyCode) : "-");
+                fixed.setWidth(dp(90));
+                fixed.setGravity(android.view.Gravity.CENTER);
+                row.addView(fixed);
+            }
+
             android.widget.CheckBox box = new android.widget.CheckBox(context);
-            box.setText(OPTIONAL_NAMES[i]);
             box.setChecked(element == null || element.visible);
             boxes[i] = box;
-            layout.addView(box);
+            row.addView(box);
+            layout.addView(row);
         }
+
+        android.widget.ScrollView scroll = new android.widget.ScrollView(context);
+        scroll.addView(layout);
 
         new android.app.AlertDialog.Builder(context)
             .setTitle("Controles")
-            .setView(layout)
+            .setView(scroll)
             .setPositiveButton("Aplicar", (dialog, which) -> {
                 setUiVisible(showAll.isChecked());
                 int checkedProfile = profiles.getCheckedRadioButtonId() - 1000;
-                for (int i = 0; i < OPTIONAL_IDS.length; i++) {
-                    TouchElement element = findElementById(OPTIONAL_IDS[i]);
+                boolean[] wantedVisible = new boolean[rowIds.length];
+                int[] wantedKeys = new int[rowIds.length];
+                for (int i = 0; i < rowIds.length; i++) {
+                    TouchElement element = findElementById(rowIds[i]);
+                    wantedVisible[i] = boxes[i].isChecked();
+                    wantedKeys[i] = element != null ? element.keyCode : 0;
                     if (element != null) {
-                        element.visible = boxes[i].isChecked();
+                        element.visible = wantedVisible[i];
                     }
                 }
                 saveLayout();
                 if (checkedProfile >= 0 && checkedProfile < NUM_PROFILES
                         && checkedProfile != activeProfile) {
-                    // switchProfile guarda el perfil actual y carga el nuevo
-                    // (la visibilidad recién marcada ya quedó guardada arriba,
-                    //  se reaplica tras el cambio).
-                    boolean[] wanted = new boolean[OPTIONAL_IDS.length];
-                    for (int i = 0; i < wanted.length; i++) {
-                        wanted[i] = boxes[i].isChecked();
-                    }
                     switchProfile(checkedProfile);
-                    for (int i = 0; i < OPTIONAL_IDS.length; i++) {
-                        TouchElement element = findElementById(OPTIONAL_IDS[i]);
+                    for (int i = 0; i < rowIds.length; i++) {
+                        TouchElement element = findElementById(rowIds[i]);
                         if (element != null) {
-                            element.visible = wanted[i];
+                            element.visible = wantedVisible[i];
+                            if (rowRemappable[i] && wantedKeys[i] != 0) {
+                                element.keyCode = wantedKeys[i];
+                            }
                         }
                     }
                     saveLayout();
                 }
+                invalidate();
+            })
+            .setNegativeButton("Cancelar", null)
+            .show();
+    }
+
+    private static final String[] KEY_LABELS = {"A", "S", "D", "Q", "V", "Z",
+        "ESPACIO", "SHIFT", "TAB", "T", "F1", "F2", "F3",
+        "1", "2", "3", "`", "ESC", "\u2191", "\u2193", "\u2190", "\u2192"};
+    private static final int[] KEY_CODES = {KeyEvent.KEYCODE_A, KeyEvent.KEYCODE_S,
+        KeyEvent.KEYCODE_D, KeyEvent.KEYCODE_Q, KeyEvent.KEYCODE_V,
+        KeyEvent.KEYCODE_Z, KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_SHIFT_LEFT,
+        KeyEvent.KEYCODE_TAB, KeyEvent.KEYCODE_T, KeyEvent.KEYCODE_F1,
+        KeyEvent.KEYCODE_F2, KeyEvent.KEYCODE_F3, KeyEvent.KEYCODE_1,
+        KeyEvent.KEYCODE_2, KeyEvent.KEYCODE_3, KeyEvent.KEYCODE_GRAVE,
+        KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+        KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT};
+
+    private static String keyLabel(int keyCode) {
+        for (int i = 0; i < KEY_CODES.length; i++) {
+            if (KEY_CODES[i] == keyCode) {
+                return KEY_LABELS[i];
+            }
+        }
+        return "?";
+    }
+
+    private void openKeyPicker(Context context, String elementId, android.widget.Button keyButton) {
+        TouchElement element = findElementById(elementId);
+        int checked = 0;
+        if (element != null) {
+            for (int i = 0; i < KEY_CODES.length; i++) {
+                if (KEY_CODES[i] == element.keyCode) {
+                    checked = i;
+                    break;
+                }
+            }
+        }
+        new android.app.AlertDialog.Builder(context)
+            .setTitle("Tecla")
+            .setSingleChoiceItems(KEY_LABELS, checked, (dialog, which) -> {
+                TouchElement target = findElementById(elementId);
+                if (target != null) {
+                    target.keyCode = KEY_CODES[which];
+                    saveLayout();
+                }
+                keyButton.setText(KEY_LABELS[which]);
+                dialog.dismiss();
                 invalidate();
             })
             .setNegativeButton("Cancelar", null)
@@ -461,7 +542,9 @@ final class TouchControlsView extends View {
         }
         drawActionButton(canvas, editButton);
         drawActionButton(canvas, keyboardButton);
-        drawActionButton(canvas, pauseButton);
+        if (pauseButton.visible) {
+            drawActionButton(canvas, pauseButton);
+        }
 
         if (editMode) {
             drawEditModeOverlay(canvas);
@@ -556,6 +639,8 @@ final class TouchControlsView extends View {
                 pressed = cruiseActive;
             } else if (button.kind == ElementKind.SHIFT) {
                 pressed = shiftActive;
+            } else if (button.comboExtra != 0) {
+                pressed = isPressed(button.keyCode) && isPressed(button.comboExtra);
             } else {
                 pressed = isPressed(button.keyCode);
             }
@@ -948,9 +1033,9 @@ final class TouchControlsView extends View {
         }
         cruiseActive = active;
         if (active) {
-            pressKey(KeyEvent.KEYCODE_A);
+            pressKey(cruiseButton.keyCode);
         } else {
-            releaseKey(KeyEvent.KEYCODE_A);
+            releaseKey(cruiseButton.keyCode);
         }
         invalidate();
     }
@@ -961,9 +1046,9 @@ final class TouchControlsView extends View {
         }
         shiftActive = active;
         if (active) {
-            pressKey(KeyEvent.KEYCODE_SHIFT_LEFT);
+            pressKey(shiftButton.keyCode);
         } else {
-            releaseKey(KeyEvent.KEYCODE_SHIFT_LEFT);
+            releaseKey(shiftButton.keyCode);
         }
         invalidate();
     }
@@ -1023,7 +1108,7 @@ final class TouchControlsView extends View {
                 return Collections.singleton(button.keyCode);
             }
         }
-        if (pauseButton != null && pauseButton.contains(pointerX, pointerY)) {
+        if (pauseButton != null && pauseButton.visible && pauseButton.contains(pointerX, pointerY)) {
             return Collections.singleton(pauseButton.keyCode);
         }
 
@@ -1097,7 +1182,8 @@ final class TouchControlsView extends View {
         final String id;
         final String label;
         final String code;
-        final int keyCode;
+        int keyCode;
+        final int defaultKeyCode;
         final float defaultNormX;
         final float defaultNormY;
         final float defaultRadiusScale;
@@ -1119,6 +1205,7 @@ final class TouchControlsView extends View {
             this.label = label;
             this.code = code;
             this.keyCode = keyCode;
+            this.defaultKeyCode = keyCode;
             this.defaultNormX = defaultNormX;
             this.defaultNormY = defaultNormY;
             this.defaultRadiusScale = defaultRadiusScale;
@@ -1145,6 +1232,7 @@ final class TouchControlsView extends View {
             this.normY = defaultNormY;
             this.sizeFactor = 1f;
             this.visible = true;
+            this.keyCode = defaultKeyCode;
         }
 
         boolean contains(float px, float py) {
