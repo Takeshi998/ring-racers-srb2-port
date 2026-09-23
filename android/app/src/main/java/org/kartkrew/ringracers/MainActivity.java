@@ -293,6 +293,7 @@ public final class MainActivity extends Activity {
         }
         File realPath = resolvePrimaryPath(tree);
         if (realPath != null) {
+            realPath = normalizePickedFolder(realPath);
             StorageHelper.setCustomRoot(this, realPath);
             try {
                 File storageRoot = AssetExtractor.prepareUserHome(this);
@@ -307,6 +308,22 @@ public final class MainActivity extends Activity {
         } else {
             status.setText(tr("folderfail"));
         }
+    }
+
+    /**
+     * Avoids RingRacers/Game/RingRacers nesting: the engine appends the game
+     * folder itself, so if the user picks a folder that already IS it
+     * (by name, or because it directly contains bios.pk3), use its parent.
+     */
+    private File normalizePickedFolder(File picked) {
+        if (new File(picked, "bios.pk3").isFile() && picked.getParentFile() != null) {
+            return picked.getParentFile();
+        }
+        if (picked.getName().equalsIgnoreCase(StorageHelper.GAME_DIR_NAME)
+                && picked.getParentFile() != null) {
+            return picked.getParentFile();
+        }
+        return picked;
     }
 
     /**
@@ -369,6 +386,14 @@ public final class MainActivity extends Activity {
                 File storageRoot = AssetExtractor.prepareUserHome(this);
                 File gameDir = StorageHelper.getGameDir(storageRoot);
                 final boolean shared = StorageHelper.hasSharedAccess();
+                // Noassets gate: never launch the engine without bios.pk3
+                // (it would die with "Expected in /"). Show where to put files.
+                File waddir = new File(getFilesDir(), "game");
+                if (!new File(waddir, "bios.pk3").isFile()) {
+                    File staging = new File(gameDir, "game");
+                    throw new IOException("NEEDFILE:bios.pk3|" + staging.getAbsolutePath());
+                }
+                final String lastError = readLastError(gameDir);
                 final String lastError = readLastError(gameDir);
                 readMarker(gameDir, "loading.txt"); // silent cleanup, no nag screen
                 runOnUiThread(() -> {
@@ -382,7 +407,10 @@ public final class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     String message = exception.getMessage();
                     if (message != null && message.startsWith("NEEDFILE:")) {
-                        message = tr("needfile") + message.substring(9) + tr("needfile2");
+                        String[] parts = message.substring(9).split("\\|", 2);
+                        String name = parts[0];
+                        String where = parts.length > 1 ? parts[1] : "";
+                        message = tr("needfile") + name + "\n" + where;
                     }
                     status.setText(message);
                     progress.setVisibility(View.GONE);

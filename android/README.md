@@ -19,6 +19,13 @@ GLES2 renderer.
 - Optional: the loading screen has "Elegir carpeta" to pick a different storage
   root (primary storage only — the native engine needs a real filesystem path,
   so SD/OTG without OS path mapping won't work). Default stays `/sdcard`.
+  Pick the folder that will CONTAIN `RingRacers` (e.g. `/sdcard` itself): if
+  you pick `RingRacers` — or a folder with `bios.pk3` directly inside — the
+  app normalizes it so the game folder is never nested twice.
+- No-assets builds: copy the 16 files over USB either as
+  `RingRacers/game/<file>` or PC-style `RingRacers/<file>`; the app imports
+  them on first launch and refuses to start the engine until `bios.pk3`
+  is present (instead of a cryptic "Expected in /").
 
 The APK only bundles core runtime assets (see `stageGameAssets` in
 `app/build.gradle`). It never packages `ringconfig.cfg`, profiles, replays,

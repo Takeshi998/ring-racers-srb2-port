@@ -56,10 +56,10 @@ final class AssetExtractor {
         }
 
         AssetManager assets = context.getAssets();
-        // No-assets builds: users copy the 16 files over USB into shared
-        // RingRacers/game/<rel>; first launch imports them into private storage.
-        File sharedGame = new File(StorageHelper.getGameDir(
-            StorageHelper.resolveStorageRoot(context)), "game");
+        // No-assets builds: users copy the 16 files over USB. Accept two layouts:
+        // shared RingRacers/game/<rel> (preferred) or PC-style RingRacers/<rel>.
+        File sharedDir = StorageHelper.getGameDir(StorageHelper.resolveStorageRoot(context));
+        File sharedGame = new File(sharedDir, "game");
         int completed = 0;
         try {
             for (String relativePath : GAME_ASSETS) {
@@ -70,7 +70,11 @@ final class AssetExtractor {
                 } else {
                     File staged = new File(sharedGame, relativePath);
                     if (!staged.isFile()) {
-                        throw new IOException("NEEDFILE:" + relativePath);
+                        staged = new File(sharedDir, relativePath);
+                    }
+                    if (!staged.isFile()) {
+                        throw new IOException("NEEDFILE:" + relativePath + "|"
+                            + new File(sharedGame, "").getAbsolutePath());
                     }
                     copyStaged(staged, destination);
                 }
