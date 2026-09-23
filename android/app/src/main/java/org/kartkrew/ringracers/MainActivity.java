@@ -394,7 +394,6 @@ public final class MainActivity extends Activity {
                     throw new IOException("NEEDFILE:bios.pk3|" + staging.getAbsolutePath());
                 }
                 final String lastError = readLastError(gameDir);
-                final String lastError = readLastError(gameDir);
                 readMarker(gameDir, "loading.txt"); // silent cleanup, no nag screen
                 runOnUiThread(() -> {
                     if (lastError != null) {
