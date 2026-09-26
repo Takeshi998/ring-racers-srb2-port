@@ -122,7 +122,7 @@ public final class GameActivity extends SDLActivity {
     }
 
     /** Opens a JSON control layout via the system picker.
-     * Uses */* MIME: several file explorers don't handle application/json. */
+     * Uses star-slash-star MIME: several file explorers don't handle application/json. */
     public void pickControlLayout() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
