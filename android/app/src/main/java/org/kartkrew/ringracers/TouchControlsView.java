@@ -475,12 +475,7 @@ final class TouchControlsView extends View {
         android.widget.Button importButton = new android.widget.Button(context);
         importButton.setText("Importar");
         importButton.setAllCaps(false);
-        importButton.setOnClickListener(v -> {
-            Context ctx = getContext();
-            if (ctx instanceof GameActivity) {
-                ((GameActivity) ctx).pickControlLayout();
-            }
-        });
+        importButton.setOnClickListener(v -> showImportDialog(context));
         fileRow.addView(exportButton);
         fileRow.addView(importButton);
         layout.addView(fileRow);
@@ -595,15 +590,58 @@ final class TouchControlsView extends View {
             try (FileOutputStream output = new FileOutputStream(out)) {
                 output.write(root.toString(1).getBytes(StandardCharsets.UTF_8));
             }
+            android.media.MediaScannerConnection.scanFile(getContext(),
+                new String[]{out.getAbsolutePath()},
+                new String[]{"application/json"}, null);
             return out;
         } catch (Exception e) {
             return null;
         }
     }
 
+    /** Layouts JSON exported by this app, found in the game folder. */
+    File[] listExportedLayouts() {
+        try {
+            File dir = StorageHelper.getGameDir(
+                StorageHelper.resolveStorageRoot(getContext()));
+            File[] files = dir.listFiles((d, name) ->
+                name.startsWith("controles-perfil") && name.endsWith(".json"));
+            if (files == null) {
+                return new File[0];
+            }
+            java.util.Arrays.sort(files, (a, b) -> a.getName().compareTo(b.getName()));
+            return files;
+        } catch (Exception e) {
+            return new File[0];
+        }
+    }
+
+    /** Shows our exported layouts first; falls back to the system picker. */
+    private void showImportDialog(final Context context) {
+        final File[] files = listExportedLayouts();
+        final String[] names = new String[files.length + 1];
+        for (int i = 0; i < files.length; i++) {
+            names[i] = files[i].getName();
+        }
+        names[files.length] = "Otra ubicación…";
+        new android.app.AlertDialog.Builder(context)
+            .setTitle("Importar layout")
+            .setItems(names, (dialog, which) -> {
+                if (which < files.length) {
+                    int applied = importProfile(files[which]);
+                    android.widget.Toast.makeText(context,
+                        applied >= 0 ? "Botones aplicados: " + applied : "Archivo inválido",
+                        android.widget.Toast.LENGTH_LONG).show();
+                } else if (context instanceof GameActivity) {
+                    ((GameActivity) context).pickControlLayout();
+                }
+            })
+            .setNegativeButton("Cancelar", null)
+            .show();
+    }
+
     /** Imports a profile JSON picked via SAF. Returns buttons applied, or -1 on error. */
     int importProfile(android.net.Uri uri) {
-        int applied = 0;
         try (InputStream input = getContext().getContentResolver().openInputStream(uri)) {
             if (input == null) {
                 return -1;
@@ -618,9 +656,37 @@ final class TouchControlsView extends View {
                 }
                 buffer.write(chunk, 0, read);
             }
-            JSONArray buttons = new JSONObject(
-                new String(buffer.toByteArray(), StandardCharsets.UTF_8))
-                .getJSONArray("buttons");
+            return applyLayout(new JSONObject(
+                new String(buffer.toByteArray(), StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    /** Imports a profile JSON from a local file. Returns buttons applied, or -1 on error. */
+    int importProfile(File file) {
+        try (java.io.FileInputStream input = new java.io.FileInputStream(file)) {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            byte[] chunk = new byte[8192];
+            int total = 0, read;
+            while ((read = input.read(chunk)) != -1) {
+                total += read;
+                if (total > 65536) {
+                    return -1;
+                }
+                buffer.write(chunk, 0, read);
+            }
+            return applyLayout(new JSONObject(
+                new String(buffer.toByteArray(), StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    /** Applies a parsed layout to the live controls. Returns buttons applied. */
+    private int applyLayout(JSONObject root) throws org.json.JSONException {
+        JSONArray buttons = root.getJSONArray("buttons");
+        int applied = 0;
             for (int i = 0; i < buttons.length(); i++) {
                 JSONObject button = buttons.getJSONObject(i);
                 TouchElement element = findElementById(button.optString("id", ""));
@@ -663,9 +729,6 @@ final class TouchControlsView extends View {
                 invalidate();
             }
             return applied;
-        } catch (Exception e) {
-            return -1;
-        }
     }
 
     @Override

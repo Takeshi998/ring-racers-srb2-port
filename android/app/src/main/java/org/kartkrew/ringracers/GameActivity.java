@@ -121,21 +121,15 @@ public final class GameActivity extends SDLActivity {
         handler.post(() -> SDLActivity.sendMessage(3, 0));
     }
 
-    /** Opens a JSON control layout (exported from this or another device). */
+    /** Opens a JSON control layout via the system picker.
+     * Uses */* MIME: several file explorers don't handle application/json. */
     public void pickControlLayout() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("application/json");
+        intent.setType("*/*");
         try {
             startActivityForResult(intent, REQUEST_CONTROL_LAYOUT);
-        } catch (Exception e) {
-            Intent any = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            any.addCategory(Intent.CATEGORY_OPENABLE);
-            any.setType("*/*");
-            try {
-                startActivityForResult(any, REQUEST_CONTROL_LAYOUT);
-            } catch (Exception ignored) {
-            }
+        } catch (Exception ignored) {
         }
     }
 
